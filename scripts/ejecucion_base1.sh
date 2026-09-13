@@ -10,16 +10,15 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 # Nos movemos a la raíz del proyecto para mantener el contexto relativo
 cd "$ROOT_DIR" || exit 1
 
-PROTOCOL="${1:-tcp}"
-FILE="${2:-$ROOT_DIR/documento.pdf}"
+FILE="${1:-$ROOT_DIR/Tp1-Consigna.pdf}"
 
 if [ ! -f "$FILE" ]; then
     echo "❌ Error: No se encontró el archivo '$FILE'."
     exit 1
 fi
 
-echo "🚀 Iniciando servidor en segundo plano con protocolo: $PROTOCOL..."
-python3 server.py "$PROTOCOL" &
+echo "🚀 Iniciando servidor en segundo plano..."
+python3 src/start-server -s "$ROOT_DIR" &
 SERVER_PID=$!
 
 # Mata el proceso del servidor automáticamente al terminar el script
@@ -29,7 +28,7 @@ trap "kill $SERVER_PID 2>/dev/null" EXIT
 sleep 1
 
 echo "📤 Ejecutando cliente para enviar '$FILE'..."
-python3 client.py "$PROTOCOL" "$FILE"
+python3 src/upload -s "$FILE"
 
 # Espera a que finalicen las tareas pendientes
 wait $SERVER_PID 2>/dev/null

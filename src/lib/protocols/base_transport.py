@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class BaseTransport(ABC):
 
     @abstractmethod
@@ -7,7 +8,7 @@ class BaseTransport(ABC):
         pass
 
     @abstractmethod
-    def accept(self) -> 'BaseTransport':
+    def accept(self) -> "BaseTransport":
         pass
 
     @abstractmethod
@@ -16,13 +17,10 @@ class BaseTransport(ABC):
 
     @abstractmethod
     def send(self, data: bytes) -> None:
-        """Recibe un buffer de cualquier tamaño,
-        cliente y servidor no tienen idea de como el protocolo maneja el particionado"""
         pass
 
     @abstractmethod
     def recv(self) -> bytes:
-        """Rearma las partes de un buffer y lo entrega transparente"""
         pass
 
     @abstractmethod

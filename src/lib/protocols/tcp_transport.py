@@ -1,8 +1,7 @@
 import socket
-from lib.base_transport import BaseTransport
 
-#HECHO CON IA
-# NO ES PARTE DEL TP, SIRVE PARA PROBAR QUE CLIENTE Y SERVIDOR FUNCIONAN
+from lib.protocols.base_transport import BaseTransport
+
 
 class TCPTransport(BaseTransport):
     def __init__(self, host: str, port: int, sock: socket.socket = None):
@@ -25,10 +24,8 @@ class TCPTransport(BaseTransport):
         self.sock.connect((self.host, self.port))
 
     def send(self, data: bytes) -> None:
-        # En TCP sendall envía todo el buffer.
-        # En StopWait/SACK (UDP), la clase iterará internamente `data` en bloques MSS de 1024 bytes.
         self.sock.sendall(data)
-        self.sock.shutdown(socket.SHUT_WR) # Señaliza fin de datos en el stream TCP
+        self.sock.shutdown(socket.SHUT_WR)
 
     def recv(self) -> bytes:
         buffer = bytearray()
