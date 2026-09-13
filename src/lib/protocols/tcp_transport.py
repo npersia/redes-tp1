@@ -24,8 +24,10 @@ class TCPTransport(BaseTransport):
         self.sock.connect((self.host, self.port))
 
     def send(self, data: bytes) -> None:
+        # En TCP sendall envía todo el buffer.
+        # En StopWait/SACK (UDP), la clase iterará internamente `data` en bloques MSS de 1024 bytes.
         self.sock.sendall(data)
-        self.sock.shutdown(socket.SHUT_WR)
+        self.sock.shutdown(socket.SHUT_WR) # Señaliza fin de datos en el stream TCP
 
     def recv(self) -> bytes:
         buffer = bytearray()

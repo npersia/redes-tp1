@@ -5,6 +5,8 @@ from lib.protocols.tcp_transport import TCPTransport
 class TransportFactory:
     _PROTOCOLS = {
         "tcp": TCPTransport,
+        # "sw": StopAndWaitTransport,
+        # "sack": SACKTransport,
     }
 
     @classmethod
