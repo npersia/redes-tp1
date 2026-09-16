@@ -1,5 +1,7 @@
 import os
 from threading import Thread
+import threading
+import socket
 
 from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_output_filepath, load_config
@@ -60,7 +62,10 @@ def run_server(arguments, output_filepath,shutdown_event):
 
     try:
         while not shutdown_event.is_set(): 
-            connection = transport.accept()
+            try:
+                connection = transport.accept()
+            except socket.timeout:
+                continue
             thread = Thread( 
                     target=handle_connection,
                     args=(connection, output_filepath),
@@ -76,4 +81,14 @@ def main():
     arguments = parse_arguments(config)
     configure(arguments.verbosity)
     output_filepath = get_output_filepath(arguments, config)
-    run_server(arguments, output_filepath)
+    shutdown_event = threading.Event()
+    server_thread = threading.Thread(
+        target=run_server,
+        args=(arguments, output_filepath, shutdown_event),
+        daemon=True
+    )
+    server_thread.start()
+    input("Presione Enter para detener el servidor...\n")
+    shutdown_event.set()
+    server_thread.join()
+    logger.info("[Servidor] Deteniendo el servidor...")
