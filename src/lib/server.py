@@ -1,4 +1,5 @@
 import os
+from threading import Thread
 
 from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_output_filepath, load_config
@@ -42,23 +43,32 @@ def save_received_file(content, output_filepath):
 
 
 def handle_connection(connection, output_filepath):
-    received_content = receive_content(connection)
-    if is_download_request(received_content):
-        send_requested_file(connection, received_content, output_filepath)
-    else:
-        save_received_file(received_content, output_filepath)
-    connection.close()
+    try: 
+        received_content = receive_content(connection)
+        if is_download_request(received_content):
+            send_requested_file( connection, received_content, output_filepath )
+        else:
+            save_received_file( received_content, output_filepath )
+    finally: 
+        connection.close()
 
 
-def run_server(arguments, output_filepath):
+def run_server(arguments, output_filepath,shutdown_event):
     transport = create_transport(arguments)
     transport.start_server()
     logger.info(f"[Servidor] Esperando recibir archivo vía {arguments.protocol}...")
+
     try:
-        connection = transport.accept()
-        handle_connection(connection, output_filepath)
-    finally:
-        transport.close()
+        while not shutdown_event.is_set(): 
+            connection = transport.accept()
+            thread = Thread( 
+                    target=handle_connection,
+                    args=(connection, output_filepath),
+                    daemon=True 
+                 ) 
+            thread.start() 
+    finally: 
+        transport.close() 
 
 
 def main():
