@@ -2,6 +2,7 @@ import os
 
 from lib.file_transfer.file_transfer import receive_content, send_file, send_request, write_file
 from lib.logger.logger import configure, logger
+from lib.protocols.base_transport import ConnectionClosed
 from lib.protocols.factory import TransportFactory
 
 
@@ -25,6 +26,8 @@ def upload(arguments):
         logger.info(f"[Cliente] Transmitiendo '{arguments.src}'...")
         send_file(transport, arguments.src)
         logger.info("[Cliente] Transferencia completada.")
+    except ConnectionClosed: #Esto todavía no sucede
+        logger.error("[Cliente] El servidor cerró la conexión. La transferencia fue cancelada.")
     finally:
         transport.close()
 
@@ -43,5 +46,7 @@ def download(arguments):
         write_file(arguments.dst, received_content)
         received_bytes = len(received_content)
         logger.info(f"[Cliente] Archivo descargado ({received_bytes} bytes).")
+    except ConnectionClosed: #Esto todavía no sucede
+        logger.error("[Cliente] El servidor cerró la conexión. La descarga fue cancelada.")
     finally:
         transport.close()

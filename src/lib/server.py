@@ -1,5 +1,4 @@
 import os
-from threading import Thread
 import threading
 import socket
 
@@ -7,7 +6,61 @@ from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_output_filepath, load_config
 from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
 from lib.logger.logger import configure, logger
+from lib.protocols.base_transport import ConnectionClosed
 from lib.protocols.factory import TransportFactory
+
+class Dispatcher:
+    def __init__(self):
+        self.threads = []
+        self.stopping = threading.Event()
+        self.lock = threading.Lock()
+
+    def start(self, shutdown_event, transport, output_filepath):
+        try:
+            while not shutdown_event.is_set():
+                try:
+                    connection = transport.accept()
+                except socket.timeout:
+                    continue
+
+                thread = threading.Thread(
+                    target=self._worker,
+                    args=(connection, output_filepath, handle_connection)
+                )
+                thread.connection = connection
+
+                with self.lock:
+                    self.threads.append(thread)
+
+                thread.start()
+        finally:
+            transport.close()
+            self._stop()
+
+    def _worker(self, connection, output_filepath, handler):
+        try:
+            handler(connection, output_filepath, self.stopping)
+        except (ConnectionClosed, OSError) as error:
+            if self.stopping.is_set():
+                logger.info("[Servidor] Transferencia cancelada por cierre del servidor.")
+            else:
+                logger.error(f"[Servidor] Error en la conexión: {error}")
+        finally:
+            with self.lock:
+                if threading.current_thread() in self.threads:
+                    self.threads.remove(threading.current_thread())
+
+    def _stop(self):
+        self.stopping.set()
+
+        with self.lock:
+            active_threads = list(self.threads)
+
+        for thread in active_threads:
+            thread.connection.shutdown() #Esto todavía no sucede
+
+        for thread in active_threads:
+            thread.join()
 
 
 def create_transport(arguments):
@@ -44,9 +97,12 @@ def save_received_file(content, output_filepath):
     logger.info(f"[Servidor] Archivo guardado correctamente ({len(content)} bytes).")
 
 
-def handle_connection(connection, output_filepath):
+def handle_connection(connection, output_filepath, stopping):
     try: 
         received_content = receive_content(connection)
+        if stopping.is_set():
+            logger.info("[Servidor] Transferencia cancelada, no se guarda el archivo.")
+            return
         if is_download_request(received_content):
             send_requested_file( connection, received_content, output_filepath )
         else:
@@ -60,20 +116,8 @@ def run_server(arguments, output_filepath,shutdown_event):
     transport.start_server()
     logger.info(f"[Servidor] Esperando recibir archivo vía {arguments.protocol}...")
 
-    try:
-        while not shutdown_event.is_set(): 
-            try:
-                connection = transport.accept()
-            except socket.timeout:
-                continue
-            thread = Thread( 
-                    target=handle_connection,
-                    args=(connection, output_filepath),
-                    daemon=True 
-                 ) 
-            thread.start() 
-    finally: 
-        transport.close() 
+    dispatcher = Dispatcher()
+    dispatcher.start(shutdown_event, transport, output_filepath)
 
 
 def main():
@@ -90,5 +134,6 @@ def main():
     server_thread.start()
     input("Presione Enter para detener el servidor...\n")
     shutdown_event.set()
-    server_thread.join()
     logger.info("[Servidor] Deteniendo el servidor...")
+    server_thread.join()
+    logger.info("[Servidor] Servidor detenido.")

@@ -39,6 +39,9 @@ class TCPTransport(BaseTransport):
             buffer.extend(chunk)
         return bytes(buffer)
 
+    def shutdown(self) -> None:
+        pass
+
     def close(self) -> None:
         if self.sock:
             self.sock.close()
