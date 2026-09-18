@@ -40,7 +40,10 @@ def add_protocol_argument(parser, config):
 
 
 def upload_parser(config):
-    parser = argparse.ArgumentParser(prog="upload")
+    parser = argparse.ArgumentParser(
+        prog="upload",
+        description="< command description >",
+        formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position=40))
     add_common_arguments(parser, config)
     parser.add_argument("-s", "--src", default=config["src"], metavar="FILEPATH", help="source file path")
     parser.add_argument("-n", "--name", metavar="FILENAME", help="file name")
@@ -49,7 +52,10 @@ def upload_parser(config):
 
 
 def download_parser(config):
-    parser = argparse.ArgumentParser(prog="download")
+    parser = argparse.ArgumentParser(
+        prog="download",
+        description="< command description >",
+        formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position=40))
     add_common_arguments(parser, config)
     parser.add_argument("-d", "--dst", default=config["dst"], metavar="FILEPATH", help="destination file path")
     parser.add_argument("-n", "--name", metavar="FILENAME", help="file name")
