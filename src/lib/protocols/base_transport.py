@@ -1,5 +1,10 @@
 from abc import ABC, abstractmethod
 
+
+class ConnectionClosed(Exception):
+    """El otro extremo cortó la conexión antes de que terminara la transferencia."""
+
+
 class BaseTransport(ABC):
 
     @abstractmethod
@@ -23,6 +28,11 @@ class BaseTransport(ABC):
     @abstractmethod
     def recv(self) -> bytes:
         """Rearma las partes de un buffer y lo entrega transparente"""
+        pass
+
+    @abstractmethod
+    def shutdown(self) -> None:
+        """Aborta la transferencia en curso de cualquier send/recv pendiente."""
         pass
 
     @abstractmethod

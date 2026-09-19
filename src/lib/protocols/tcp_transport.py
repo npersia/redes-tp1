@@ -1,8 +1,7 @@
 import socket
-from lib.base_transport import BaseTransport
 
-#HECHO CON IA
-# NO ES PARTE DEL TP, SIRVE PARA PROBAR QUE CLIENTE Y SERVIDOR FUNCIONAN
+from lib.protocols.base_transport import BaseTransport
+
 
 class TCPTransport(BaseTransport):
     def __init__(self, host: str, port: int, sock: socket.socket = None):
@@ -15,6 +14,7 @@ class TCPTransport(BaseTransport):
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind((self.host, self.port))
         self.sock.listen(5)
+        self.sock.settimeout(0.5)
 
     def accept(self) -> BaseTransport:
         client_sock, _ = self.sock.accept()
@@ -38,6 +38,9 @@ class TCPTransport(BaseTransport):
                 break
             buffer.extend(chunk)
         return bytes(buffer)
+
+    def shutdown(self) -> None:
+        pass
 
     def close(self) -> None:
         if self.sock:

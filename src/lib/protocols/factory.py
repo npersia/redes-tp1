@@ -1,5 +1,6 @@
-from lib.base_transport import BaseTransport
-from lib.tcp_transport import TCPTransport
+from lib.protocols.base_transport import BaseTransport
+from lib.protocols.tcp_transport import TCPTransport
+
 
 class TransportFactory:
     _PROTOCOLS = {
