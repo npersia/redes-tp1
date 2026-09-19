@@ -1,11 +1,11 @@
 import os
 
-from lib.configuration.config import BASE_DIR, load_config as load_json_config
+from lib.configuration.config import load_config as load_env_config
 
 
 
 def load_config():
-    return load_json_config("config_server.json")
+    return load_env_config("config_server.env")
 
 
 def get_output_filepath(arguments, config):
@@ -13,4 +13,4 @@ def get_output_filepath(arguments, config):
     if not os.path.isabs(storage_path):
         storage_path = os.path.abspath(storage_path)
     os.makedirs(storage_path, exist_ok=True)
-    return os.path.join(storage_path, config["output_filename"])
+    return os.path.join(storage_path, config["OUTPUT_FILENAME"])
