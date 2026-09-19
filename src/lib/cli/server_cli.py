@@ -18,18 +18,18 @@ def argument_parser(config):
     )
     parser.add_argument(
         "-H", "--host",
-        default=config["host"],
+        default=config["HOST"],
         help="service IP address",
     )
     parser.add_argument(
         "-p", "--port",
         type=int,
-        default=config["port"],
+        default=config["SERVER_PORT"],
         help="service port",
     )
     parser.add_argument(
         "-s", "--storage",
-        default=config["storage"],
+        default=config["STORAGE"],
         help="storage directory path",
     )
     return parser
@@ -38,6 +38,7 @@ def argument_parser(config):
 def parse_arguments(config):
     parser = argument_parser(config)
     arguments = parser.parse_args()
-    arguments.protocol = config["protocol"] #TODO: todos los protocolos deben de ser validos.
-    arguments.verbosity = 1 if arguments.verbose else -1 if arguments.quiet else config["verbosity"]
+    arguments.protocol = config["PROTOCOL"] #TODO: todos los protocolos deben de ser validos.
+    verbosity = int(config["VERBOSITY"])
+    arguments.verbosity = 1 if arguments.verbose else -1 if arguments.quiet else verbosity
     return arguments
