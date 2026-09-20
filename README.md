@@ -14,10 +14,16 @@ TP1 de Redes: transferencia de archivos sobre UDP con protocolo RDT (Stop & Wait
 
 Desde el directorio `src/`:
 
+Terminal 1: Servidor
+
 ```text
 # Servidor
 python3 start-server -H ADDR -p PORT -s DIRPATH
+```
 
+Terminal 2: Cliente
+
+```text
 # Subir un archivo
 python3 upload -H ADDR -p PORT -s FILEPATH -n FILENAME -r protocol
 
@@ -27,7 +33,7 @@ python3 download -H ADDR -p PORT -d FILEPATH -n FILENAME -r protocol
 
 ----
 
-## Testeo de la red (mininet)
+## Testeo de la red (Mininet)
 
 Como se ejecutan las redes de prueba:
 

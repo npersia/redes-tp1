@@ -1,10 +1,12 @@
 # Modelos de flujo - TP1 Redes
 
-Modelos de flujo Cliente-Servidor general y de Upload/Download según `protocolo_udp_spec.md`.
+[Cliente-Servidor en el Handshake](#handshake).
+[Protocolo de Stop-and-Wait](#2-protocolo-de-stop-and-wait).
+[Protocolo de Selective ACK](#3-protocolo-de-selective-ack).
 
 ---
 
-## 1. Flujo inicial Cliente-Servidor
+## 1. Cliente-Servidor
 
 > El **cliente** elige el protocolo a utilizar (`SW` | `SR/SA`) al invocar el comando, mediante la opción `-r / --protocol` de upload/download.
 
@@ -73,7 +75,7 @@ Puntos de la v2:
 
 ---
 
-## 2. Flujo del Protocolo de Stop-and-Wait
+## 2. Protocolo de Stop-and-Wait
 
 ```mermaid
 sequenceDiagram
@@ -106,7 +108,7 @@ Dentro del paquete a enviar, se incluye un **checksum** para validar la **integr
 
 ---
 
-## 3. Flujo del Protocolo de Selective ACK (Acknowledgment)
+## 3. Protocolo de Selective ACK
 
 > Para el flujo se utilizará una `cwind = 4`
 
