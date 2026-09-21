@@ -36,8 +36,9 @@ Fields:
         Control flags.
         8 bits.
         Examples:
-            SYN - initialization / negotiation
-            FIN - end of transfer
+            7 6 5 4 3 2 1 0
+            7: SYN - initialization / negotiation
+            6: FIN - end of transfer
             ...
 
     SEQUENCE NUMBER:
@@ -65,6 +66,7 @@ x - 40 Bytes = tamaño maximo de payload que puede enviar la app usadando este p
 # Estas funciones se basan en utilizar funciones de bytes
 # Como AND, SHIFT, etc. Aprovechando que estamos trabajando con bytes.
 
+HEADER_SIZE = 12
 
 def get_header_version(packet: bytes) -> int:
     """Get the version of the RDT protocol from the packet header."""
@@ -91,6 +93,23 @@ def get_header_flags(packet: bytes) -> int:
     return packet[3]
 
 
+SYN_MASK = 0b10000000
+FIN_MASK = 0b01000000
+
+
+def get_flag_SYN(flags: bytes) -> int:
+    """"Get the flag SYN from the flags of the packet"""
+    # x000 0000 ---> x y le hago el and con 1
+    return (flags[0] >> 7) & 1
+
+
+def get_flag_FIN(flags: bytes) -> int:
+    """"Get the flag SYN from the flags of the packet"""
+    # 0x00 0000 ---> x y le hago el and con 1
+    # haciendo con mascara return (flags[0] & 0b10000000)
+    return (flags[0] >> 6) & 1
+
+
 def get_header_sequence_paquet(packet: bytes) -> int:
     """Get the sequence paquet of the RDT protocol from the packet header."""
     return int.from_bytes(packet[4:6], "big")
@@ -104,3 +123,10 @@ def get_header_ack(packet: bytes) -> int:
 def get_header_cwind(packet: bytes) -> int:
     """Get the cwind of the RDT protocol from the packet header."""
     return packet[8]
+
+
+def get_paquet_payload(packet: bytes) -> bytes:
+    """"Get the payload of the RDT protocol from the packet"""
+    if len(packet) < HEADER_SIZE:
+        raise ValueError("Paquete menor al tamaño del header")
+    return packet[HEADER_SIZE:]
