@@ -38,7 +38,8 @@ Fields:
             7: SYN - initialization / negotiation
             6: FIN - end of transfer
             5: ERR - error in packet
-            4 - 0: reserved for future use
+            4: ACK 
+            3 - 0: reserved for future use
 
     HLEN:
         Header length (in bytes).
@@ -82,6 +83,7 @@ def get_header_version(packet: bytes) -> int:
 def get_header_protocol(packet: bytes) -> int:
     """Get the protocol of the RDT protocol from the packet header."""
     # toma el primer byte luego hace un AND con 0x0F para obtener los 4 bits más significativos.
+    # stop and wait = 1, selective ack = 2, tcp = 3, otro valor es invalido
     return packet[0] & 0x0F
 
 
@@ -112,6 +114,10 @@ def get_flag_ERR(flags: bytes) -> int:
     return (flags[0] >> 5) & 1
 
 
+def get_flag_ACK(flags: bytes) -> int:
+    return (flags[0] >> 4) & 1
+
+
 def get_header_hlen(packet: bytes) -> int:
     return packet[2]
 
@@ -124,6 +130,8 @@ def get_header_options(packet: bytes) -> bytes:
         return packet[12:hlen]
     return b"" #No options
 
+    # TODO: definir una variable en lugar de 12
+
 
 def get_header_sequence_paquet(packet: bytes) -> int:
     """Get the sequence paquet of the RDT protocol from the packet header."""
@@ -135,6 +143,14 @@ def get_header_ack(packet: bytes) -> int:
     return int.from_bytes(packet[8:12], "big")
 
 
+
+
 def get_payload(packet: bytes) -> bytes:
     hlen = get_header_hlen(packet)
     return packet[hlen:]
+
+
+def make_packet(version=0, protocol=0,flags=0, hlen=12,
+                 sequence_number=0, ack=0, options=0, payload=0) -> bytes:
+    """Build the RDT packet""" 
+    return version+protocol+flags+hlen+sequence_number+ack+options+payload
