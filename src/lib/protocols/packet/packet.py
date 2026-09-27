@@ -150,7 +150,27 @@ def get_payload(packet: bytes) -> bytes:
     return packet[hlen:]
 
 
-def make_packet(version=0, protocol=0,flags=0, hlen=12,
-                 sequence_number=0, ack=0, options=0, payload=0) -> bytes:
-    """Build the RDT packet""" 
-    return version+protocol+flags+hlen+sequence_number+ack+options+payload
+def make_packet(version=0, protocol=0,flags=0,
+                 sequence_number=0, ack=0, options=b"", payload=b"") -> bytes:
+    """Build the RDT packet"""
+    hlen = 12
+    total_hlen = hlen + len(options)
+    # fuerzo a que ambos valores usen medio byte en la seccion correspondiente
+    version_bites = version & 0b00001111
+    protocol_bites = protocol & 0b00001111
+
+    #acomodo los dos parametros en un solo byte version 4 primeros, protocol en los ultimos 4
+    v_p = (version_bites << 4) | protocol_bites
+
+    header_init = bytes([
+        v_p,
+        flags & 0b11111111, #solo por seguridad, para evitar que algo sea de mas de 8 bits
+        total_hlen & 0b11111111,
+        0b00000000 # los bits resercados de definidos.
+    ])
+
+    sequence_number_bytes = sequence_number.to_bytes(4, byteorder="big")
+    ack_bytes = ack.to_bytes(4, byteorder="big")
+
+
+    return header_init + sequence_number_bytes + ack_bytes + options + payload
