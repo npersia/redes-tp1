@@ -1,11 +1,12 @@
 from lib.protocols.base_transport import BaseTransport
 from lib.protocols.tcp.tcp_transport import TCPTransport
+from lib.protocols.stop_and_wait.stop_wait import StopAndWait
 
 
 class TransportFactory:
     _PROTOCOLS = {
         "tcp": TCPTransport,
-        # "sw": StopAndWaitTransport,
+        "sw": StopAndWait,
         # "sack": SACKTransport,
     }
 

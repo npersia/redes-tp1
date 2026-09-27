@@ -32,13 +32,18 @@ def argument_parser(config):
         default=config["STORAGE"],
         help="storage directory path",
     )
+    parser.add_argument(
+        "-r", "--protocol",
+        default=config["PROTOCOL"],
+        help="error recovery protocol",
+    )
     return parser
 
 
 def parse_arguments(config):
     parser = argument_parser(config)
     arguments = parser.parse_args()
-    arguments.protocol = config["PROTOCOL"] #TODO: todos los protocolos deben de ser validos.
+    #arguments.protocol = config["PROTOCOL"] #TODO: todos los protocolos deben de ser validos.
     verbosity = int(config["VERBOSITY"])
     arguments.verbosity = 1 if arguments.verbose else -1 if arguments.quiet else verbosity
     return arguments

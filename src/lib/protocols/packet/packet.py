@@ -71,6 +71,9 @@ x - 40 Bytes = maximum size of payload that can be sent by the application using
 SYN_MASK = 0b10000000
 FIN_MASK = 0b01000000
 ERR_MASK = 0b00100000
+ACK_MASK = 0b00010000
+
+
 
 
 def get_header_version(packet: bytes) -> int:
