@@ -34,3 +34,8 @@ def receive_file(transport, filepath):
     content = receive_content(transport)
     write_file(filepath, content)
     return len(content)
+
+def send_upload(transport, filepath, filename):
+    header = f"UPLOAD {filename}\n".encode("utf-8")
+    file_bytes = read_file(filepath)
+    transport.send(header + file_bytes)

@@ -3,7 +3,7 @@ import threading
 import socket
 
 from lib.cli.server_cli import parse_arguments
-from lib.configuration.server_config import get_output_filepath, load_config
+from lib.configuration.server_config import get_storage_dir, load_config
 from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
 from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed
@@ -15,7 +15,7 @@ class Dispatcher:
         self.stopping = threading.Event()
         self.lock = threading.Lock()
 
-    def start(self, shutdown_event, transport, output_filepath):
+    def start(self, shutdown_event, transport, storage_dir):
         try:
             while not shutdown_event.is_set():
                 try:
@@ -25,7 +25,7 @@ class Dispatcher:
 
                 thread = threading.Thread(
                     target=self._worker,
-                    args=(connection, output_filepath, handle_connection)
+                    args=(connection, storage_dir, handle_connection)
                 )
                 thread.connection = connection
 
@@ -37,9 +37,9 @@ class Dispatcher:
             transport.close()
             self._stop()
 
-    def _worker(self, connection, output_filepath, handler):
+    def _worker(self, connection, storage_dir, handler):
         try:
-            handler(connection, output_filepath, self.stopping)
+            handler(connection, storage_dir, self.stopping)
         except (ConnectionClosed, OSError) as error:
             if self.stopping.is_set():
                 logger.info("[Servidor] Transferencia cancelada por cierre del servidor.")
@@ -75,14 +75,14 @@ def is_download_request(content):
     return content.startswith(b"DOWNLOAD ")
 
 
-def get_requested_filepath(content, output_filepath):
+def get_requested_filepath(content, storage_dir):
     filename = content[len(b"DOWNLOAD "):].decode("utf-8")
     filename = os.path.basename(filename)
-    return os.path.join(os.path.dirname(output_filepath), filename)
+    return os.path.join(storage_dir, filename)
 
 
-def send_requested_file(connection, content, output_filepath):
-    requested_filepath = get_requested_filepath(content, output_filepath)
+def send_requested_file(connection, content, storage_dir):
+    requested_filepath = get_requested_filepath(content, storage_dir)
     logger.info(f"[Servidor] Enviando '{requested_filepath}'...")
     if os.path.exists(requested_filepath):
         send_file(connection, requested_filepath)
@@ -90,45 +90,57 @@ def send_requested_file(connection, content, output_filepath):
     logger.error(f"[Servidor] El archivo '{requested_filepath}' no existe.")
     send_error(connection, f"El archivo '{requested_filepath}' no existe.")
 
+def save_uploaded_file(content, storage_dir):
+    first_newline = content.find(b"\n")
+    if first_newline == -1:
+        logger.error("[Servidor] Formato de UPLOAD inválido.")
+        return
+    # Separar encabezado UPLOAD del contenido binario
+    header = content[:first_newline]
+    file_bytes = content[first_newline + 1:]
+    # Extraer el nombre del archivo enviado por el cliente
+    filename = header[len(b"UPLOAD "):].decode("utf-8")
+    filename = os.path.basename(filename)
+    # Ruta completa final en el servidor
+    target_filepath = os.path.join(storage_dir, filename)
+    logger.info(f"[Servidor] Guardando en '{target_filepath}'...")
+    write_file(target_filepath, file_bytes)
+    logger.info(f"[Servidor] Archivo '{filename}' guardado correctamente ({len(file_bytes)} bytes).")
 
-def save_received_file(content, output_filepath):
-    logger.info(f"[Servidor] Cliente conectado. Guardando en '{output_filepath}'...")
-    write_file(output_filepath, content)
-    logger.info(f"[Servidor] Archivo guardado correctamente ({len(content)} bytes).")
-
-
-def handle_connection(connection, output_filepath, stopping):
+def handle_connection(connection, storage_dir, stopping):
     try: 
         received_content = receive_content(connection)
         if stopping.is_set():
             logger.info("[Servidor] Transferencia cancelada, no se guarda el archivo.")
             return
         if is_download_request(received_content):
-            send_requested_file( connection, received_content, output_filepath )
+            send_requested_file(connection, received_content, storage_dir)
+        elif received_content.startswith(b"UPLOAD "):
+            save_uploaded_file(received_content, storage_dir)
         else:
-            save_received_file( received_content, output_filepath )
+            logger.error("[Servidor] Petición no reconocida.")
     finally: 
         connection.close()
 
 
-def run_server(arguments, output_filepath,shutdown_event):
+def run_server(arguments, storage_dir,shutdown_event):
     transport = create_transport(arguments)
     transport.start_server()
     logger.info(f"[Servidor] Esperando recibir archivo vía {arguments.protocol}...")
 
     dispatcher = Dispatcher()
-    dispatcher.start(shutdown_event, transport, output_filepath)
+    dispatcher.start(shutdown_event, transport, storage_dir)
 
 
 def main():
     config = load_config()
     arguments = parse_arguments(config)
     configure(arguments.verbosity)
-    output_filepath = get_output_filepath(arguments, config)
+    storage_dir = get_storage_dir(arguments)
     shutdown_event = threading.Event()
     server_thread = threading.Thread(
         target=run_server,
-        args=(arguments, output_filepath, shutdown_event),
+        args=(arguments, storage_dir, shutdown_event),
         daemon=True
     )
     server_thread.start()
