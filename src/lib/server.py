@@ -8,6 +8,7 @@ from lib.file_transfer.file_transfer import receive_content, send_error, send_fi
 from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed
 from lib.protocols.factory import TransportFactory
+from lib.protocols.stop_and_wait.stop_wait import StopAndWait
 
 class Dispatcher:
     def __init__(self):
@@ -62,15 +63,6 @@ class Dispatcher:
         for thread in active_threads:
             thread.join()
 
-
-def create_transport(arguments):
-    return TransportFactory.get_transport(
-        arguments.protocol,
-        arguments.host,
-        arguments.port,
-    )
-
-
 def is_download_request(content):
     return content.startswith(b"DOWNLOAD ")
 
@@ -121,10 +113,9 @@ def handle_connection(connection, storage_dir, stopping):
 
 
 def run_server(arguments, storage_dir,shutdown_event):
-    transport = create_transport(arguments)
+    transport = StopAndWait(arguments.host, arguments.port)
     transport.start_server()
-    logger.info(f"[Servidor] Esperando recibir archivo vía {arguments.protocol}...")
-
+    logger.info(f"[Servidor] Esperando recibir archivos en {arguments.host}:{arguments.port}...")
     dispatcher = Dispatcher()
     dispatcher.start(shutdown_event, transport, storage_dir)
 
