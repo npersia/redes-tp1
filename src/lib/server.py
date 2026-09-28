@@ -95,13 +95,10 @@ def save_uploaded_file(content, storage_dir):
     if first_newline == -1:
         logger.error("[Servidor] Formato de UPLOAD inválido.")
         return
-    # Separar encabezado UPLOAD del contenido binario
     header = content[:first_newline]
     file_bytes = content[first_newline + 1:]
-    # Extraer el nombre del archivo enviado por el cliente
     filename = header[len(b"UPLOAD "):].decode("utf-8")
     filename = os.path.basename(filename)
-    # Ruta completa final en el servidor
     target_filepath = os.path.join(storage_dir, filename)
     logger.info(f"[Servidor] Guardando en '{target_filepath}'...")
     write_file(target_filepath, file_bytes)
