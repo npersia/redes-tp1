@@ -68,12 +68,20 @@ x - 40 Bytes = maximum size of payload that can be sent by the application using
 # Estas funciones se basan en utilizar funciones de bytes
 # Como AND, SHIFT, etc. Aprovechando que estamos trabajando con bytes.
 
+HEADER_SIZE = 12
+
 SYN_MASK = 0b10000000
 FIN_MASK = 0b01000000
 ERR_MASK = 0b00100000
 ACK_MASK = 0b00010000
 
 
+
+
+def is_valid(packet: bytes) -> bool:
+    """Verifica que el datagrama se pueda interpretar como paquete RDT."""
+    return (len(packet) >= HEADER_SIZE
+            and HEADER_SIZE <= get_header_hlen(packet) <= len(packet))
 
 
 def get_header_version(packet: bytes) -> int:
@@ -129,8 +137,8 @@ def get_header_options(packet: bytes) -> bytes:
 
     hlen = get_header_hlen(packet)
 
-    if hlen > 12:
-        return packet[12:hlen]
+    if hlen > HEADER_SIZE:
+        return packet[HEADER_SIZE:hlen]
     return b"" #No options
 
     # TODO: definir una variable en lugar de 12
@@ -156,8 +164,7 @@ def get_payload(packet: bytes) -> bytes:
 def make_packet(version=0, protocol=0,flags=0,
                  sequence_number=0, ack=0, options=b"", payload=b"") -> bytes:
     """Build the RDT packet"""
-    hlen = 12
-    total_hlen = hlen + len(options)
+    total_hlen = HEADER_SIZE + len(options)
     # fuerzo a que ambos valores usen medio byte en la seccion correspondiente
     version_bites = version & 0b00001111
     protocol_bites = protocol & 0b00001111
