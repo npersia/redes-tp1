@@ -33,9 +33,10 @@ class StopAndWait(BaseTransport):
     def start_server(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host,self.port))
+        self.sock.settimeout(self.timeout) #sin esto accept() bloquea para siempre y el servidor no se puede apagar
         self.is_closed = False
 
-    def accept(self) -> StopAndWait:
+    def accept(self) -> "StopAndWait":
         """lado servidor, espera el SYN y crea un socket efimero. """
         if not self.sock:
             raise RuntimeError("No server initialized.")
@@ -93,7 +94,7 @@ class StopAndWait(BaseTransport):
                         except socket.timeout:
                             retries +=1
             except socket.timeout:
-                continue
+                raise #que decida el llamador si sigue esperando (ver Dispatcher en server.py)
             except Exception as e:
                 if self.is_closed:
                     raise ConnectionClosed("server closed in acepte connection.")
