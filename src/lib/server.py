@@ -113,6 +113,7 @@ def handle_connection(connection, storage_dir, stopping):
 
 
 def run_server(arguments, storage_dir,shutdown_event):
+    # TODO: Cuando se implemente SACK cambiar la fima de metodo segun el protocolo q
     transport = StopAndWait(arguments.host, arguments.port)
     transport.start_server()
     logger.info(f"[Servidor] Esperando recibir archivos en {arguments.host}:{arguments.port}...")
