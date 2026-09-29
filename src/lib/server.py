@@ -33,6 +33,8 @@ class Dispatcher:
                     self.threads.append(thread)
 
                 thread.start()
+                logger.debug(f"[Servidor] hilo {thread.name} atendiendo a {connection.remote_address}; "
+                             f"{len(self.threads)} conexion(es) activa(s)")
         finally:
             transport.close()
             self._stop()
@@ -56,6 +58,7 @@ class Dispatcher:
         with self.lock:
             active_threads = list(self.threads)
 
+        logger.debug(f"[Servidor] cerrando: {len(active_threads)} transferencia(s) en curso a abortar")
         for thread in active_threads:
             thread.connection.shutdown() #Esto todavía no sucede
 
@@ -64,6 +67,7 @@ class Dispatcher:
 
 
 def create_transport(arguments):
+    logger.debug(f"[Servidor] protocolo={arguments.protocol} escuchando en {arguments.host}:{arguments.port}")
     return TransportFactory.get_transport(
         arguments.protocol,
         arguments.host,

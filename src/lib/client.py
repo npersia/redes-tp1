@@ -7,6 +7,7 @@ from lib.protocols.factory import TransportFactory
 
 
 def create_transport(arguments):
+    logger.debug(f"[Cliente] protocolo={arguments.protocol} destino={arguments.host}:{arguments.port}")
     return TransportFactory.get_transport(
         arguments.protocol,
         arguments.host,
