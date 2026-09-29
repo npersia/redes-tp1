@@ -6,7 +6,7 @@ from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_output_filepath, load_config
 from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
 from lib.logger.logger import configure, logger
-from lib.protocols.base_transport import ConnectionClosed
+from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.factory import TransportFactory
 
 class Dispatcher:
@@ -42,6 +42,8 @@ class Dispatcher:
     def _worker(self, connection, output_filepath, handler):
         try:
             handler(connection, output_filepath, self.stopping)
+        except TransferCancelled as cancelled:
+            logger.info(f"[Servidor] {cancelled}")
         except (ConnectionClosed, OSError) as error:
             if self.stopping.is_set():
                 logger.info("[Servidor] Transferencia cancelada por cierre del servidor.")
@@ -60,7 +62,7 @@ class Dispatcher:
 
         logger.debug(f"[Servidor] cerrando: {len(active_threads)} transferencia(s) en curso a abortar")
         for thread in active_threads:
-            thread.connection.shutdown() #Esto todavía no sucede
+            thread.connection.shutdown() #avisa ERR+CANCEL y recien despues cierra
 
         for thread in active_threads:
             thread.join()

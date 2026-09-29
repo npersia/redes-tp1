@@ -35,11 +35,12 @@ Fields:
         8 bits.
         Examples:
             7 6 5 4 3 2 1 0
-            7: SYN - initialization / negotiation
-            6: FIN - end of transfer
-            5: ERR - error in packet
-            4: ACK 
-            3 - 0: reserved for future use
+            7: SYN    - initialization / negotiation
+            6: FIN    - end of transfer
+            5: ERR    - error in packet
+            4: ACK    - acknowledge of packet
+            3: CAN - cancel of transfer
+            2 - 0: reserved for future use
 
     HLEN:
         Header length (in bytes).
@@ -74,6 +75,7 @@ SYN_MASK = 0b10000000
 FIN_MASK = 0b01000000
 ERR_MASK = 0b00100000
 ACK_MASK = 0b00010000
+CANCEL_MASK = 0b00001000
 
 
 
@@ -127,6 +129,11 @@ def get_flag_ERR(flags: bytes) -> int:
 
 def get_flag_ACK(flags: bytes) -> int:
     return (flags[0] >> 4) & 1
+
+
+def get_flag_CANCEL(flags: bytes) -> int:
+    """Get the flag CANCEL from the flags of the packet."""
+    return (flags[0] >> 3) & 1
 
 
 def get_header_hlen(packet: bytes) -> int:

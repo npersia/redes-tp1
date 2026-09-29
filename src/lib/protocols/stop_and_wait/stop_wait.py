@@ -1,7 +1,8 @@
 import socket
+import threading
 
 from lib.logger.logger import logger
-from lib.protocols.base_transport import BaseTransport, ConnectionClosed
+from lib.protocols.base_transport import BaseTransport, ConnectionClosed, TransferCancelled
 import lib.protocols.packet.packet as packet
 from lib.protocols.stop_and_wait.trace import RecvTrace, SendTrace
 
@@ -12,6 +13,7 @@ PROTOCOL_STOP_AND_WAIT = 1 #TODO tiene que irse a base_transport esta constante 
 VERSION = 1
 RETRIES = 10
 MAX_PAYLOAD_SIZE = 1400
+ABORT_NOTICES = 3 #cuantas veces repito el ERR al abortar, porque UDP lo puede perder y nadie lo confirma
 
 
 # OJO QUE CAMBIO LA CABECERA PORQUE ES UDP, NECESITO SABER EL REMOTE ADDRESS PARA TRABAJAR. TCP ME LO DABA
@@ -27,6 +29,47 @@ class StopAndWait(BaseTransport):
         self.timeout = TIMEOUT #TODO PODRIA ESTAR EN UN ARCHIVO APARTE
         self.retries = RETRIES
         self.exp_sequence_number = 0 #TODO deberia ser un random
+        self.cancel_requested = threading.Event() #lo prende cancel() desde otro hilo
+        self.is_listener = False #el socket de escucha no tiene un peer al que avisarle
+
+
+    ###################################################################################################################
+    # ACA EMPIEZA LA CANCELACION
+    ###################################################################################################################
+    def cancel(self) -> None:
+        """
+        Pide abortar la transferencia en curso. Se llama desde otro hilo.
+        """
+        logger.debug("[SW] cancel(): cancelacion pedida desde otro hilo")
+        self.cancel_requested.set()
+
+    def notify_abort(self) -> None:
+        """
+        Le avisa al otro extremo que cortamos, para que no quede esperando para siempre.
+
+        Van los dos bits prendidos, ERR y CANCEL:
+        - ERR: le avisa al otro extremo que hubo un error y que no espere mas.
+        - CANCEL: le avisa al otro extremo que el error fue deliberado.
+        """
+        if self.sock is None or self.remote_address is None or self.is_listener:
+            return #sin peer (o siendo el socket de escucha) el aviso iria a la nada
+
+        err_packet = packet.make_packet(
+            version=VERSION,
+            protocol=PROTOCOL_STOP_AND_WAIT,
+            flags=packet.ERR_MASK | packet.CANCEL_MASK,
+            sequence_number=self.sequence_number,
+            ack=self.exp_sequence_number
+        )
+
+        logger.debug(f"[SW] aviso la cancelacion a {self.remote_address} con "
+                     f"{ABORT_NOTICES} paquetes de aborto (flags ERR+CANCEL)")
+        for _ in range(ABORT_NOTICES):
+            try:
+                self.sock.sendto(err_packet, self.remote_address)
+            except OSError as error:
+                logger.debug(f"[SW] no se pudo avisar el aborto: {error}")
+                return
 
 
     ###################################################################################################################
@@ -37,6 +80,7 @@ class StopAndWait(BaseTransport):
         self.sock.bind((self.host,self.port))
         self.sock.settimeout(self.timeout) #sin esto accept() bloquea para siempre y el servidor no se puede apagar
         self.is_closed = False
+        self.is_listener = True #remote_address apunta a si mismo: no hay a quien avisarle
 
     def accept(self) -> "StopAndWait":
         """lado servidor, espera el SYN y crea un socket efimero. """
@@ -146,6 +190,9 @@ class StopAndWait(BaseTransport):
 
         retries = 0
         while retries < self.retries:
+            if self.cancel_requested.is_set():
+                logger.debug("[SW] handshake cancelado por el usuario")
+                raise TransferCancelled("Conexion cancelada por el usuario durante el handshake.")
             try:
                 self.sock.sendto(syn_packet, (self.host, self.port))
                 data, server_address = self.sock.recvfrom(2048)
@@ -216,6 +263,11 @@ class StopAndWait(BaseTransport):
                           self.remote_address, self.sequence_number)
 
         for i, chunk in enumerate(chunks):
+            if self.cancel_requested.is_set():
+                self.notify_abort()
+                trace.cancelled()
+                raise TransferCancelled(f"Transferencia cancelada por el usuario: {trace.balance}.")
+
             last = (i == len(chunks) - 1)
             if last:
                 flags = packet.FIN_MASK
@@ -257,6 +309,10 @@ class StopAndWait(BaseTransport):
                     flags_byte = bytes([packet.get_header_flags(resp)])
 
                     if packet.get_flag_ERR(flags_byte):
+                        if packet.get_flag_CANCEL(flags_byte):
+                            trace.remote_cancel()
+                            raise TransferCancelled(
+                                f"El otro extremo canceló la transferencia: {trace.balance}.")
                         trace.remote_error()
                         raise ConnectionClosed("El remoto notificó un error con flag ERR.")
 
@@ -273,6 +329,10 @@ class StopAndWait(BaseTransport):
                 except socket.timeout:
                     ret += 1
                     trace.retransmit(expected_ack, ret, self.retries)
+                    if self.cancel_requested.is_set():
+                        self.notify_abort()
+                        trace.cancelled(retransmitiendo=True)
+                        raise TransferCancelled(f"Transferencia cancelada por el usuario: {trace.balance}.")
 
             if not ack_received:
                 trace.gave_up(self.sequence_number, self.retries)
@@ -293,6 +353,11 @@ class StopAndWait(BaseTransport):
         trace = RecvTrace(self.remote_address, self.exp_sequence_number, self.timeout)
 
         while True:
+            if self.cancel_requested.is_set():
+                self.notify_abort()
+                trace.cancelled()
+                raise TransferCancelled(f"Recepcion cancelada por el usuario: {trace.bytes} bytes recibidos.")
+
             try:
                 data, addr = self.sock.recvfrom(2048)
                 if addr != self.remote_address or not packet.is_valid(data):
@@ -302,6 +367,11 @@ class StopAndWait(BaseTransport):
                 flags_byte = bytes([packet.get_header_flags(data)])
 
                 if packet.get_flag_ERR(flags_byte):
+                    if packet.get_flag_CANCEL(flags_byte):
+                        trace.remote_cancel()
+                        raise TransferCancelled(
+                            f"El otro extremo canceló la transferencia: "
+                            f"{trace.bytes} bytes recibidos.")
                     trace.remote_error()
                     raise ConnectionClosed("Transferencia abortada por error remoto (ERR flag).")
 
@@ -361,20 +431,37 @@ class StopAndWait(BaseTransport):
         self.sock.sendto(ack_pkt, self.remote_address)
 
     ###################################################################################################################
-    # ACA EMPIEZA EL FIN, HAY QUE MOVERLO A BASE_TRANSPORT
+    # ACA EMPIEZA EL CIERRE, HAY QUE MOVERLO A BASE_TRANSPORT
     ###################################################################################################################
 
     def shutdown(self) -> None:
-        self.is_closed = True
-        if self.sock:
-            try:
-                self.sock.close()
-            except Exception:
-                pass
+        """
+        Aborta: le avisa al otro extremo y corta lo que este bloqueado.
+        """
+        if self.sock is None:
+            self.is_closed = True
+            return #ya se solto el socket: no repito el aviso ni el cierre
+
+        self.notify_abort()
+        logger.debug(f"[SW] shutdown(): avise el corte a {self.remote_address}")
+        self.close()
+
     def close(self) -> None:
-        self.shutdown()
+        """
+        Libera el socket sin avisarle nada al otro extremo.
+        """
+        self.is_closed = True
+        sock, self.sock = self.sock, None
+        if sock is None:
+            return
+
+        logger.debug(f"[SW] close(): cierro el socket local de {self.remote_address}")
+        try:
+            sock.close()
+        except Exception as error:
+            logger.debug(f"[SW] close(): el socket ya venia mal ({error})")
 
 
     ###################################################################################################################
-    # ACA TERMINA EL FIN, HAY QUE MOVERLO A BASE_TRANSPORT
+    # ACA TERMINA EL CIERRE, HAY QUE MOVERLO A BASE_TRANSPORT
     ###################################################################################################################

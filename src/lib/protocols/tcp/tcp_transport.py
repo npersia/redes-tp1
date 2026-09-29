@@ -1,4 +1,5 @@
 import socket
+import threading
 
 from lib.protocols.base_transport import BaseTransport
 
@@ -8,6 +9,7 @@ class TCPTransport(BaseTransport):
         self.host = host
         self.port = int(port)
         self.sock = sock
+        self.cancel_requested = threading.Event()
 
     def start_server(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -40,8 +42,27 @@ class TCPTransport(BaseTransport):
         return bytes(buffer)
 
     def shutdown(self) -> None:
-        pass
+        """
+        Aborta lo que este bloqueado. El aviso al otro extremo lo manda el kernel.
+        """
+        if self.sock is None:
+            return
+
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass #nunca se conecto, ya estaba cerrado, o es el socket de escucha
+        self.close()
 
     def close(self) -> None:
-        if self.sock:
-            self.sock.close()
+        """
+        Libera el socket. Idempotente.
+        """
+        sock, self.sock = self.sock, None
+        if sock is None:
+            return
+
+        try:
+            sock.close()
+        except OSError:
+            pass
