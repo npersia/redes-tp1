@@ -43,8 +43,24 @@ Como se ejecutan las redes de prueba:
   sudo mn --custom src/topologias/topologiaBasica.py --topo TopologiaBasica
   ```
 
+   ```text
+  sudo mn --custom src/topologias/topologiaBasicon.py --topo TopologiaBasicon
+  ```
+
 - Topología con tráfico simulado (todavía no tiene tráfico):
 
   ```text
   sudo mn --custom src/topologias/topologiaTrafico.py --topo TopologiaTrafico
   ```
+
+python3 src/start-server -H 0.0.0.0 -v -s ./server/storage 
+Pasos para abrir wireshark con mininet:
+1)  abrir una topologia con mininet
+2) usar xtrem h1 
+3) wireshark &
+4) usas el comando que quieras
+
+* UPLOAD - red punto a punto con 0% de perdida y 40ms de RTT
+* UPLOAD - red punto a punto con 10% de perdida y 40ms de RTT - SACK : 56s
+* DOWNLOAD - red punto a punto con 10% de perdida y 40ms de RTT - SACK : 57s
+* 
