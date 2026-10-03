@@ -7,7 +7,7 @@ import tempfile
 import time
 import unittest
 
-from base import ConnectionClosed, Hilo, SWTestCase, packet, sw
+from base import ConnectionClosed, Hilo, SWTestCase, packet, bt, sw
 from netsim import (DROP, PASS, drop_acks_nth, drop_data_nth, dup_nth,
                     es_ack_de, lossy, salvo)
 
@@ -324,8 +324,8 @@ class TestCierre(SWTestCase):
         sock_shutdown = otro.sock
         antes = sock_shutdown.tx
         otro.shutdown()
-        self.assertEqual(sock_shutdown.tx, antes + sw.ABORT_NOTICES,
-                         f"shutdown() manda {sw.ABORT_NOTICES} avisos{self.volcado()}")
+        self.assertEqual(sock_shutdown.tx, antes + bt.ABORT_NOTICES,
+                         f"shutdown() manda {bt.ABORT_NOTICES} avisos{self.volcado()}")
 
     def test_shutdown_no_avisa_dos_veces(self):
         """El mismo transporte pasa por shutdown() y por close() en server.py."""

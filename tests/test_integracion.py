@@ -18,7 +18,7 @@ from lib.protocols.factory import TransportFactory
 
 
 def args(**kwargs):
-    base = {"verbosity": -1, "protocol": "sw", "host": HOST, "port": 0}
+    base = {"verbosity": -1, "protocol": "sw", "host": HOST, "port": 0, "name": None}
     base.update(kwargs)
     return types.SimpleNamespace(**base)
 
@@ -38,7 +38,7 @@ class TestFactory(SWTestCase):
 
     def test_protocolo_desconocido(self):
         with self.assertRaises(ValueError):
-            TransportFactory.get_transport("sack", HOST, 1)
+            TransportFactory.get_transport("xyz", HOST, 1)
 
 
 class TestFlujosDeAplicacion(SWTestCase):
@@ -54,7 +54,7 @@ class TestFlujosDeAplicacion(SWTestCase):
         shutil.rmtree(self.dir, ignore_errors=True)
         super().tearDown()
 
-    def _arrancar_servidor(self, output_filepath):
+    def _arrancar_servidor(self, storage_dir):
         servidor = self.servidor()
         puerto = servidor.sock.getsockname()[1]
         parada = threading.Event()
@@ -62,7 +62,7 @@ class TestFlujosDeAplicacion(SWTestCase):
         def atender():
             conexion = self.aceptar(servidor)
             self._transportes.append(conexion)
-            server_app.handle_connection(conexion, output_filepath, parada)
+            server_app.handle_connection(conexion, storage_dir, parada)
             return conexion
 
         hilo = Hilo(atender)
@@ -82,8 +82,8 @@ class TestFlujosDeAplicacion(SWTestCase):
         origen = self._archivo("origen.bin", contenido)
         destino = os.path.join(self.dir, "recibido.bin")
 
-        _, puerto, hilo = self._arrancar_servidor(destino)
-        client_app.upload(args(port=puerto, src=origen))
+        _, puerto, hilo = self._arrancar_servidor(self.dir)
+        client_app.upload(args(port=puerto, src=origen, name=os.path.basename(destino)))
         hilo.resultado_o_error(15.0)
 
         with open(destino, "rb") as f:
@@ -93,8 +93,8 @@ class TestFlujosDeAplicacion(SWTestCase):
         origen = self._archivo("vacio.bin", b"")
         destino = os.path.join(self.dir, "recibido-vacio.bin")
 
-        _, puerto, hilo = self._arrancar_servidor(destino)
-        client_app.upload(args(port=puerto, src=origen))
+        _, puerto, hilo = self._arrancar_servidor(self.dir)
+        client_app.upload(args(port=puerto, src=origen, name=os.path.basename(destino)))
         hilo.resultado_o_error(15.0)
 
         self.assertTrue(os.path.exists(destino))
@@ -115,7 +115,7 @@ class TestFlujosDeAplicacion(SWTestCase):
     def test_download_de_un_archivo_existente(self):
         contenido = os.urandom(sw.MAX_PAYLOAD_SIZE * 2 + 3)
         self._archivo("pedido.bin", contenido)
-        storage = os.path.join(self.dir, "storage-marcador")
+        storage = self.dir
         destino = os.path.join(self.dir, "bajado.bin")
 
         _, puerto, hilo = self._arrancar_servidor(storage)
@@ -126,7 +126,7 @@ class TestFlujosDeAplicacion(SWTestCase):
             self.assertEqual(f.read(), contenido)
 
     def test_download_de_un_archivo_inexistente_devuelve_error(self):
-        storage = os.path.join(self.dir, "storage-marcador")
+        storage = self.dir
         destino = os.path.join(self.dir, "no-deberia-existir.bin")
 
         _, puerto, hilo = self._arrancar_servidor(storage)
@@ -137,7 +137,7 @@ class TestFlujosDeAplicacion(SWTestCase):
                          "no debe escribir el archivo ante un ERROR")
 
     def test_download_usa_basename_para_evitar_path_traversal(self):
-        storage = os.path.join(self.dir, "storage-marcador")
+        storage = self.dir
         destino = os.path.join(self.dir, "passwd")
         _, puerto, hilo = self._arrancar_servidor(storage)
         client_app.download(args(port=puerto, dst=destino,
@@ -153,11 +153,11 @@ class TestFlujosDeAplicacion(SWTestCase):
         origen = self._archivo("origen.bin", contenido)
         destino = os.path.join(self.dir, "recibido.bin")
 
-        _, puerto, hilo = self._arrancar_servidor(destino)
+        _, puerto, hilo = self._arrancar_servidor(self.dir)
         # el primer datagrama de cada socket nuevo se pierde (SYN, SYN-ACK, 1er dato)
         self.net.on_create = lambda s: setattr(s, "policy", netsim.drop_nth(1))
 
-        client_app.upload(args(port=puerto, src=origen))
+        client_app.upload(args(port=puerto, src=origen, name=os.path.basename(destino)))
         hilo.resultado_o_error(15.0)
 
         with open(destino, "rb") as f:
@@ -208,15 +208,14 @@ class TestDispatcher(SWTestCase):
         parada = threading.Event()
         dispatcher = server_app.Dispatcher()
 
-        hilo = Hilo(dispatcher.start, parada, transporte,
-                    os.path.join(dir_tmp, "salida.bin"))
+        hilo = Hilo(dispatcher.start, parada, transporte, dir_tmp)
         hilo.start()
         time.sleep(0.05)
 
         for i in range(3):
             cliente = self.cliente(puerto)
             cliente.connect()
-            cliente.send(f"cliente-{i}".encode())
+            cliente.send(f"UPLOAD salida.bin\ncliente-{i}".encode())
             cliente.close()
 
         time.sleep(0.3)

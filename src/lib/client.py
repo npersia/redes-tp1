@@ -3,7 +3,7 @@ import select
 import sys
 import threading
 
-from lib.file_transfer.file_transfer import receive_content, send_file, send_request, write_file
+from lib.file_transfer.file_transfer import receive_content, send_file, send_request, send_upload, write_file
 from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.factory import TransportFactory
@@ -66,7 +66,8 @@ def upload(arguments):
     try:
         transport.connect()
         logger.info(f"[Cliente] Transmitiendo '{arguments.src}'... (Enter para cancelar)")
-        send_file(transport, arguments.src)
+        filename = arguments.name or os.path.basename(arguments.src)
+        send_upload(transport, arguments.src, filename)
         logger.info("[Cliente] Transferencia completada.")
     except TransferCancelled as cancelled:
         logger.error(f"[Cliente] {cancelled}")

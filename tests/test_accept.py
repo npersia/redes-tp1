@@ -304,7 +304,7 @@ class TestAcceptRamasDeError(SWTestCase):
 
         self.assertTrue(hilo.esperar(2.0))
         self.assertIsInstance(hilo.error, ConnectionClosed)
-        self.assertIn("acepte connection", str(hilo.error))
+        self.assertIn("accepting a connection", str(hilo.error))
 
     def test_un_error_inesperado_con_el_servidor_abierto_se_propaga(self):
         """Rama `except Exception` sin is_closed: el error no se traduce."""

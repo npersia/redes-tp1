@@ -15,6 +15,7 @@ if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import lib.protocols.packet.packet as packet                      # noqa: E402
+import lib.protocols.base_transport as bt                         # noqa: E402
 import lib.protocols.stop_and_wait.stop_wait as sw                # noqa: E402
 from lib.protocols.base_transport import (                        # noqa: E402
     ConnectionClosed,
@@ -69,20 +70,23 @@ class SWTestCase(unittest.TestCase):
 
     def setUp(self):
         self.net = Net()
-        self._parche = self.net.patch(sw)
-        self._parche.__enter__()
+        # El handshake vive en base_transport y send/recv en stop_wait:
+        # los dos modulos tienen que usar la red simulada.
+        self._parches = [self.net.patch(sw), self.net.patch(bt)]
+        for parche in self._parches:
+            parche.__enter__()
 
-        self._timeout_orig = sw.TIMEOUT
-        self._retries_orig = sw.RETRIES
-        sw.TIMEOUT = self.timeout
-        sw.RETRIES = self.retries
+        self._timeout_orig = bt.TIMEOUT
+        self._retries_orig = bt.MAX_RETRIES
+        bt.TIMEOUT = self.timeout
+        bt.MAX_RETRIES = self.retries
 
         self._peers = []
         self._transportes = []
 
     def tearDown(self):
-        sw.TIMEOUT = self._timeout_orig
-        sw.RETRIES = self._retries_orig
+        bt.TIMEOUT = self._timeout_orig
+        bt.MAX_RETRIES = self._retries_orig
         for t in self._transportes:
             try:
                 t.close()
@@ -90,7 +94,8 @@ class SWTestCase(unittest.TestCase):
                 pass
         for p in self._peers:
             p.close()
-        self._parche.__exit__(None, None, None)
+        for parche in reversed(self._parches):
+            parche.__exit__(None, None, None)
 
     # -- helpers ----------------------------------------------------------
     def peer(self):

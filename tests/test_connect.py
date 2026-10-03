@@ -4,7 +4,7 @@ import socket
 import time
 import unittest
 
-from base import HOST, ConnectionClosed, Hilo, SWTestCase, packet, sw
+from base import HOST, ConnectionClosed, Hilo, SWTestCase, packet, bt, sw
 from netsim import DROP, PASS, drop_nth
 
 
@@ -40,8 +40,8 @@ class TestConnect(SWTestCase):
 
         syn, addr = peer.recv()
         self.assertPaquete(syn, SYN=1, ACK=0, FIN=0, ERR=0, seq=0)
-        self.assertEqual(syn["version"], sw.VERSION)
-        self.assertEqual(syn["protocol"], sw.PROTOCOL_STOP_AND_WAIT)
+        self.assertEqual(syn["version"], bt.VERSION)
+        self.assertEqual(syn["protocol"], sw.StopAndWait.PROTOCOL_ID)
 
         self._responder_syn_ack(peer, addr, client_isn=0, server_isn=100)
 

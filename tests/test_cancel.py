@@ -8,7 +8,7 @@ como tal en lugar de hablar de un error.
 import time
 import unittest
 
-from base import ConnectionClosed, Hilo, SWTestCase, TransferCancelled, packet, sw
+from base import ConnectionClosed, Hilo, SWTestCase, TransferCancelled, packet, bt, sw
 
 
 MAX = sw.MAX_PAYLOAD_SIZE
@@ -39,8 +39,8 @@ class TestAvisoDeCancelacion(ConPeer):
         t.notify_abort()
 
         vistos = peer.drain()
-        self.assertEqual(len(vistos), sw.ABORT_NOTICES,
-                         f"esperaba {sw.ABORT_NOTICES} avisos{self.volcado()}")
+        self.assertEqual(len(vistos), bt.ABORT_NOTICES,
+                         f"esperaba {bt.ABORT_NOTICES} avisos{self.volcado()}")
         for aviso in vistos:
             self.assertPaquete(aviso, ERR=1, CANCEL=1, SYN=0, FIN=0,
                                seq=1000, ack=2000, payload=b"")
