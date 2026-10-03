@@ -3,7 +3,7 @@
 import time
 import unittest
 
-from base import HOST, ConnectionClosed, Hilo, SWTestCase, packet, sw
+from base import HOST, ConnectionClosed, Hilo, SWTestCase, packet, listener, sw
 from netsim import drop_nth
 
 
@@ -25,7 +25,7 @@ class TestAccept(SWTestCase):
         self.assertGreater(servidor.sock.getsockname()[1], 0)
 
     def test_accept_sin_start_server_falla(self):
-        s = sw.StopAndWait(HOST, 9999)
+        s = listener.Listener(HOST, 9999)
         with self.assertRaises(RuntimeError):
             s.accept()
 
@@ -62,6 +62,41 @@ class TestAccept(SWTestCase):
         conexion = hilo.resultado_o_error()
         self._transportes.append(conexion)
         self.assertAlmostEqual(conexion.sock.gettimeout(), self.timeout, places=4)
+
+    # -- eleccion de protocolo ----------------------------------------------
+
+    def test_la_conexion_usa_el_protocolo_que_pide_el_syn(self):
+        from lib.protocols.selective_ack.selective_ack import SelectiveAck
+
+        for clase in (sw.StopAndWait, SelectiveAck):
+            with self.subTest(protocolo=clase.TAG):
+                servidor, puerto, hilo = self._servidor_escuchando()
+                peer = self.peer()
+
+                peer.send_pkt((HOST, puerto), flags=packet.SYN_MASK,
+                              sequence_number=0, protocol=clase.PROTOCOL_ID)
+
+                syn_ack, addr_srv = peer.recv()
+                self.assertEqual(syn_ack["protocol"], clase.PROTOCOL_ID,
+                                 "el SYN-ACK contesta con el protocolo del cliente")
+
+                peer.send_pkt(addr_srv, flags=packet.ACK_MASK, sequence_number=1,
+                              ack=1, protocol=clase.PROTOCOL_ID)
+
+                conexion = hilo.resultado_o_error()
+                self._transportes.append(conexion)
+                self.assertIs(type(conexion), clase)
+
+    def test_ignora_el_syn_con_un_protocolo_no_soportado(self):
+        servidor, puerto, hilo = self._servidor_escuchando()
+        peer = self.peer()
+
+        # 3 es TCP, que no usa este handshake; 0 y 15 no son de nadie
+        for protocolo in (0, 3, 15):
+            peer.send_pkt((HOST, puerto), flags=packet.SYN_MASK,
+                          sequence_number=0, protocol=protocolo)
+
+        self.assertIsNone(peer.try_recv(0.3)[0], "no debe contestar nada")
 
     # -- trafico que hay que descartar -------------------------------------
 

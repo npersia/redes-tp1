@@ -14,7 +14,6 @@ MAX_RETRIES = 10
 RECV_BUFFER = 2048  # muy por encima del MTU clasico de 1500
 ABORT_NOTICES = 3 #cuantas veces repito el ERR al abortar, porque UDP lo puede perder y nadie lo confirma
 
-
 class ConnectionClosed(Exception):
     """El otro extremo cortó la conexión antes de que terminara la transferencia."""
 
@@ -28,14 +27,15 @@ class TransferCancelled(ConnectionClosed):
 class BaseTransport(ABC):
     """Transporte confiable sobre datagramas.
 
-    Concentra el handshake de 3 vias, que es identico para todos los
-    protocolos salvo por el nibble `protocol` del header y el estado que cada
-    uno necesita para transferir. Las subclases implementan `send` y `recv`,
+    Concentra el lado cliente del handshake de 3 vias, que es identico para
+    todos los protocolos salvo por el nibble `protocol` del header y el estado
+    que cada uno necesita para transferir. El lado servidor lo hace Listener. Las subclases implementan `send` y `recv`,
     y `_init_peer` para preparar su propio estado.
     """
 
     # Nibble `protocol` del header. Lo define cada subclase.
     PROTOCOL_ID = 0
+    TAG = "transporte"
 
     def __init__(self, host: str, port: int, sock: socket.socket = None,
                  remote_address: tuple = None):
@@ -51,7 +51,6 @@ class BaseTransport(ABC):
         self.timeout = TIMEOUT
         self.max_retries = MAX_RETRIES
         self.cancel_requested = threading.Event() #lo prende cancel() desde otro hilo
-        self.is_listener = False #el socket de escucha no tiene un peer al que avisarle
 
     ###########################################################################
     # CANCELACION
@@ -75,8 +74,8 @@ class BaseTransport(ABC):
         - ERR: le avisa al otro extremo que hubo un error y que no espere mas.
         - CANCEL: le avisa al otro extremo que el error fue deliberado.
         """
-        if self.sock is None or self.remote_address is None or self.is_listener:
-            return #sin peer (o siendo el socket de escucha) el aviso iria a la nada
+        if self.sock is None or self.remote_address is None:
+            return #sin peer el aviso iria a la nada
 
         err_packet = packet.make_packet(
             version=VERSION,
@@ -98,105 +97,6 @@ class BaseTransport(ABC):
     ###########################################################################
     # HANDSHAKE
     ###########################################################################
-
-    # Prefijo de las trazas de debug. Lo define cada subclase.
-    TAG = "transporte"
-
-    def start_server(self) -> None:
-        """Abre el socket de escucha y lo deja listo para aceptar conexiones."""
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((self.host, self.port))
-        self.sock.settimeout(self.timeout) #sin esto accept() bloquea para siempre y el servidor no se puede apagar
-        self.is_closed = False
-        self.is_listener = True #remote_address apunta a si mismo: no hay a quien avisarle
-
-    def accept(self) -> 'BaseTransport':
-        """lado servidor, espera el SYN y crea un socket efimero."""
-        if not self.sock:
-            raise RuntimeError("No server initialized.")
-
-        while not self.is_closed:
-            try:
-                data, client_address = self.sock.recvfrom(RECV_BUFFER)
-                if not packet.is_valid(data):
-                    logger.debug(f"[{self.TAG}] accept: datagrama invalido de {client_address}, lo descarto")
-                    continue
-                flags = bytes([packet.get_header_flags(data)])
-
-                if packet.get_flag_SYN(flags):
-                    client_isn = packet.get_header_sequence_paquet(data)
-                    logger.debug(f"[{self.TAG}] accept: llego SYN de {client_address} (isn cliente={client_isn})")
-                    peer = self._accept_syn(data, client_address, client_isn)
-                    if peer is not None:
-                        return peer
-            except socket.timeout:
-                raise #que decida el llamador si sigue esperando (ver Dispatcher en server.py)
-            except Exception as e:
-                if self.is_closed:
-                    logger.debug(f"[{self.TAG}] accept: el socket del servidor se cerro mientras esperaba conexiones")
-                    raise ConnectionClosed(
-                        "server closed while accepting a connection.")
-                raise e
-        raise ConnectionClosed("Server closed.")
-
-    def _accept_syn(self, data, client_address, client_isn):
-        """Completa el handshake de un SYN ya leido de la red.
-
-        Va aparte de accept() para no tener que releer el SYN. Devuelve None si
-        el cliente no completo el handshake, y accept() sigue esperando.
-        """
-        #aca creo un socket efimero para la comunicacion
-        client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        client_sock.bind((self.host, 0))  # el 0 hace que el SO asigne un puerto libre
-        #algun timeout hay que poner para que no se quede esperando por siempre,
-        #tambien para poder mandar de nuevo
-        client_sock.settimeout(self.timeout)
-
-        logger.debug(f"[{self.TAG}] accept: socket efimero {client_sock.getsockname()} dedicado a {client_address}")
-
-        server_isn = 0  # TODO podria o deberia ser random, pero lo dejo en 0 para que sea mas facil
-
-        #respondo con SYN=1, ACK=1, seq = server_isn, ack = client_isn+1
-        syn_packet = packet.make_packet(
-            version=VERSION,
-            protocol=self.PROTOCOL_ID,
-            flags=packet.SYN_MASK | packet.ACK_MASK,
-            sequence_number=server_isn,
-            ack=client_isn + 1
-        )
-
-        logger.debug(f"[{self.TAG}] accept: envio SYN-ACK a {client_address} (isn servidor={server_isn})")
-
-        retries = 0
-        while retries < self.max_retries:
-            client_sock.sendto(syn_packet, client_address)
-            try:
-                #espero ACK del cliente y SYN=0
-                resp, addr = client_sock.recvfrom(RECV_BUFFER)
-                if addr != client_address or not packet.is_valid(resp):
-                    logger.debug(f"[{self.TAG}] accept: descarto respuesta de {addr} durante el handshake")
-                    continue
-
-                resp_flags = bytes([packet.get_header_flags(resp)])
-
-                if not packet.get_flag_SYN(resp_flags):
-                    if packet.get_header_ack(resp) == server_isn + 1:
-                        peer = self._make_peer(
-                            client_address, client_sock,
-                            server_isn + 1, client_isn + 1)
-                        logger.debug(f"[{self.TAG}] accept: conexion establecida con {client_address} "
-                                     f"(seq={peer.sequence_number}, "
-                                     f"seq esperado={peer.exp_sequence_number})")
-                        return peer
-                    logger.debug(f"[{self.TAG}] accept: ACK final con ack={packet.get_header_ack(resp)}, "
-                                 f"esperaba {server_isn + 1}; lo descarto")
-            except socket.timeout:
-                retries += 1
-                logger.debug(f"[{self.TAG}] accept: sin ACK final de {client_address}, "
-                             f"reenvio SYN-ACK ({retries}/{self.max_retries})")
-
-        logger.debug(f"[{self.TAG}] accept: handshake con {client_address} abandonado tras {self.max_retries} intentos")
-        return None
 
     def connect(self) -> None:
         """lado cliente, inicia la comunicacion."""
@@ -262,13 +162,6 @@ class BaseTransport(ABC):
         logger.debug(f"[{self.TAG}] handshake fallido: {self.max_retries} intentos sin respuesta de {self.host}:{self.port}")
         raise ConnectionClosed(
             f"Timeout: can't connect to {self.host}:{self.port}.")
-
-    def _make_peer(self, address, sock, sequence_number, exp_sequence_number):
-        """Construye el otro extremo de una conexion ya establecida."""
-        peer = type(self)(address[0], address[1], sock=sock,
-                          remote_address=address)
-        peer._init_peer(sequence_number, exp_sequence_number)
-        return peer
 
     def _init_peer(self, sequence_number, exp_sequence_number) -> None:
         """Pone la sesion en estado de poder enviar y recibir datos.

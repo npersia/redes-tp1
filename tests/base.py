@@ -16,6 +16,7 @@ if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
 
 import lib.protocols.packet.packet as packet                      # noqa: E402
 import lib.protocols.base_transport as bt                         # noqa: E402
+import lib.protocols.listener as listener                         # noqa: E402
 import lib.protocols.stop_and_wait.stop_wait as sw                # noqa: E402
 from lib.protocols.base_transport import (                        # noqa: E402
     ConnectionClosed,
@@ -70,9 +71,10 @@ class SWTestCase(unittest.TestCase):
 
     def setUp(self):
         self.net = Net()
-        # El handshake vive en base_transport y send/recv en stop_wait:
-        # los dos modulos tienen que usar la red simulada.
-        self._parches = [self.net.patch(sw), self.net.patch(bt)]
+        # El handshake vive en base_transport (cliente) y listener (servidor),
+        # y send/recv en stop_wait: todos tienen que usar la red simulada.
+        self._parches = [self.net.patch(sw), self.net.patch(bt),
+                         self.net.patch(listener)]
         for parche in self._parches:
             parche.__enter__()
 
@@ -104,7 +106,7 @@ class SWTestCase(unittest.TestCase):
         return p
 
     def servidor(self, port=0):
-        s = sw.StopAndWait(HOST, port)
+        s = listener.Listener(HOST, port)
         s.start_server()
         s.sock.role = "listen"
         self._transportes.append(s)

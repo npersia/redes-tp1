@@ -7,8 +7,7 @@ from lib.configuration.server_config import get_storage_dir, load_config
 from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
 from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
-from lib.protocols.factory import TransportFactory
-from lib.protocols.stop_and_wait.stop_wait import StopAndWait
+from lib.protocols.listener import Listener
 
 class Dispatcher:
     def __init__(self):
@@ -118,8 +117,7 @@ def handle_connection(connection, storage_dir, stopping):
 
 
 def run_server(arguments, storage_dir,shutdown_event):
-    # TODO: Cuando se implemente SACK cambiar la fima de metodo segun el protocolo q
-    transport = StopAndWait(arguments.host, arguments.port)
+    transport = Listener(arguments.host, arguments.port)
     transport.start_server()
     logger.info(f"[Servidor] Esperando recibir archivos en {arguments.host}:{arguments.port}...")
     dispatcher = Dispatcher()

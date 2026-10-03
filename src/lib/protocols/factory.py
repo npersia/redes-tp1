@@ -28,3 +28,8 @@ class TransportFactory:
         if protocol_id not in cls._PROTOCOLS_BY_ID:
             raise ValueError(f"Protocolo ID '{protocol_id}' no soportado. Opciones: {list(cls._PROTOCOLS_BY_ID.keys())}")
         return cls._PROTOCOLS_BY_ID[protocol_id](host, port)
+
+    @classmethod
+    def get_class_by_id(cls, protocol_id: int):
+        """La clase del protocolo que pide el header, o None si no hay ninguna."""
+        return cls._PROTOCOLS_BY_ID.get(protocol_id)

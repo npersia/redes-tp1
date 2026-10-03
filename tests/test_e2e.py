@@ -7,7 +7,7 @@ import tempfile
 import time
 import unittest
 
-from base import ConnectionClosed, Hilo, SWTestCase, packet, bt, sw
+from base import ConnectionClosed, Hilo, SWTestCase, packet, bt, listener, sw
 from netsim import (DROP, PASS, drop_acks_nth, drop_data_nth, dup_nth,
                     es_ack_de, lossy, salvo)
 
@@ -341,7 +341,7 @@ class TestCierre(SWTestCase):
     def test_el_socket_de_escucha_no_le_avisa_a_nadie(self):
         """Su remote_address apunta a si mismo: un aviso iria contra el propio socket."""
         servidor = self.servidor()
-        self.assertTrue(servidor.is_listener)
+        self.assertIsInstance(servidor, listener.Listener)
         sock = servidor.sock
         antes = sock.tx
 
