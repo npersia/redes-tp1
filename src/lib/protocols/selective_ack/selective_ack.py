@@ -1,6 +1,5 @@
 import socket
 
-from lib.logger.logger import logger
 from lib.protocols.base_transport import (
     RECV_BUFFER,
     TIMEOUT,
@@ -16,6 +15,7 @@ from lib.protocols.selective_ack.sack_option import (
     make_sack_option,
     parse_sack_option,
 )
+from lib.protocols.selective_ack.trace import SackRecvTrace, SackSendTrace
 
 
 # CONSTANTS
@@ -62,6 +62,9 @@ class SelectiveAck(BaseTransport):
 
         total = len(chunks)
         sent = 0
+        # _wait_event, _handle_ack y _retransmit narran sobre el mismo send()
+        self._send_trace = SackSendTrace(len(data), total, MAX_PAYLOAD_SIZE, CWND,
+                                         self.remote_address, self.sender.send_base)
 
         while sent < total or not self.sender.is_idle:
             while sent < total and self.sender.has_room():
@@ -69,10 +72,7 @@ class SelectiveAck(BaseTransport):
                 segment = self.sender.add(chunks[sent], flags)
                 self.sock.sendto(self._data_packet(segment),
                                  self.remote_address)
-                logger.debug(
-                    f"[SACK] Send seq={segment.seq} "
-                    f"({len(segment.payload)} B) "
-                    f"window={self.sender.in_flight}/{CWND}")
+                self._send_trace.segment_sent()
                 sent += 1
 
             if self.sender.is_idle:
@@ -80,9 +80,7 @@ class SelectiveAck(BaseTransport):
 
             self._wait_event()
 
-        logger.info(
-            f"[SACK] Transfer sent: {len(data)} bytes, "
-            f"{total} segments, send_base={self.sender.send_base}")
+        self._send_trace.done()
 
     # Wait for an ACK or a timeout, whichever comes first.
     def _wait_event(self) -> None:
@@ -93,6 +91,7 @@ class SelectiveAck(BaseTransport):
             data = None
         except OSError as error:
             if self.is_closed:
+                self._send_trace.closed()
                 raise ConnectionClosed("Connection closed.")
             raise error
 
@@ -109,6 +108,7 @@ class SelectiveAck(BaseTransport):
         flags = self._flags(data)
 
         if packet.get_flag_ERR(flags):
+            self._send_trace.remote_error()
             raise ConnectionClosed("Remote reported an error (ERR flag).")
 
         if not packet.get_flag_ACK(flags):
@@ -116,23 +116,24 @@ class SelectiveAck(BaseTransport):
 
         ack = packet.get_header_ack(data)
         blocks = parse_sack_option(packet.get_header_options(data))
-        logger.debug(f"[SACK] ACK={ack} SACK={blocks}")
 
-        target = self.sender.handle_ack(ack, blocks)
+        target, status = self.sender.handle_ack(ack, blocks)
+        self._send_trace.ack(status, ack, self.sender.send_base,
+                             self.sender.dup_acks, blocks)
         if target is not None:
-            self._retransmit(target, reason="fast retransmit")
+            self._retransmit(target, fast=True)
 
     # Retransmit a segment due to timeout or fast retransmit.
-    def _retransmit(self, segment, reason: str = "timeout") -> None:
+    def _retransmit(self, segment, fast: bool = False) -> None:
         if segment.retries >= self.max_retries:
+            self._send_trace.gave_up(segment.seq, self.max_retries)
             raise ConnectionClosed(
                 f"Too many retries for seq={segment.seq}.")
 
         self.sock.sendto(self._data_packet(segment), self.remote_address)
         segment.refresh(self.sender.timeout)
-        logger.info(
-            f"[SACK] Retransmission ({reason}) seq={segment.seq} "
-            f"attempt={segment.retries}")
+        self._send_trace.retransmit(segment.seq, fast, segment.retries,
+                                    self.max_retries)
 
     # Receive the whole remote stream and reassemble it in order.
     def recv(self) -> bytes:
@@ -146,29 +147,36 @@ class SelectiveAck(BaseTransport):
         # segment instead of looking only at the one that just came in.
         fin_end = None
 
+        trace = SackRecvTrace(self.remote_address, self.receiver.rcv_next, RWIND)
+
         while True:
             try:
                 data, addr = self.sock.recvfrom(RECV_BUFFER)
             except socket.timeout:
                 if self.is_closed:
+                    trace.closed()
                     raise ConnectionClosed("Connection closed.")
                 continue
             except OSError as error:
                 if self.is_closed:
+                    trace.closed()
                     raise ConnectionClosed("Connection closed.")
                 raise error
 
             if addr != self.remote_address:
+                trace.stray(addr)
                 continue
 
             flags = self._flags(data)
 
             if packet.get_flag_ERR(flags):
+                trace.remote_error()
                 raise ConnectionClosed(
                     "Transfer aborted by a remote error (ERR flag).")
 
             # Our ACK was lost, so the peer is resending the SYN-ACK
             if packet.get_flag_SYN(flags) and packet.get_flag_ACK(flags):
+                trace.syn_ack_again()
                 self.sock.sendto(self._ack_packet(), self.remote_address)
                 continue
 
@@ -182,26 +190,22 @@ class SelectiveAck(BaseTransport):
             # A FIN with no payload (empty file) advances 1, same as SW
             n_bytes = len(payload) if payload else 1
 
-            delivered = self.receiver.accept(seq, n_bytes, payload)
+            delivered, status = self.receiver.accept(seq, n_bytes, payload)
             received.extend(delivered)
             self.sock.sendto(self._ack_packet(), self.remote_address)
 
             if is_fin and fin_end is None:
                 fin_end = seq + n_bytes
 
-            logger.debug(
-                f"[SACK] Received seq={seq} ({n_bytes} B) "
-                f"delivered={len(delivered)} "
-                f"rcv_next={self.receiver.rcv_next} "
-                f"SACK={self.receiver.blocks()}")
+            trace.segment(seq, status, len(delivered), self.receiver.rcv_next,
+                          self.receiver.blocks())
 
             # The FIN only ends the transfer once every byte before it has
             # been delivered: if the FIN segment got buffered, we only find
             # that out here.
             if (fin_end is not None
                     and fin_end <= self.receiver.rcv_next):
-                logger.info(
-                    f"[SACK] Transfer received: {len(received)} bytes")
+                trace.done()
                 return bytes(received)
 
 

@@ -136,6 +136,22 @@ def get_flag_CANCEL(flags: bytes) -> int:
     return (flags[0] >> 3) & 1
 
 
+def flag_names(flags: bytes) -> str:
+    """Return the flags that are set as readable text, for the logs."""
+    set_flags = [
+        name
+        for name, is_set in (
+            ("SYN", get_flag_SYN(flags)),
+            ("FIN", get_flag_FIN(flags)),
+            ("ERR", get_flag_ERR(flags)),
+            ("ACK", get_flag_ACK(flags)),
+            ("CANCEL", get_flag_CANCEL(flags)),
+        )
+        if is_set
+    ]
+    return "+".join(set_flags) if set_flags else "-"
+
+
 def get_header_hlen(packet: bytes) -> int:
     return packet[2]
 

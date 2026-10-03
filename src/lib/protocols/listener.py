@@ -4,6 +4,7 @@ from lib.logger.logger import logger
 import lib.protocols.base_transport as base_transport
 from lib.protocols.base_transport import RECV_BUFFER, VERSION, ConnectionClosed
 from lib.protocols.factory import TransportFactory
+from lib.protocols.handshake_trace import AcceptTrace, ListenTrace
 import lib.protocols.packet.packet as packet
 
 
@@ -25,6 +26,7 @@ class Listener:
         # se leen del modulo al crear el listener, igual que en BaseTransport
         self.timeout = base_transport.TIMEOUT
         self.max_retries = base_transport.MAX_RETRIES
+        self.trace = ListenTrace(self.TAG)
 
     def start_server(self) -> None:
         """Abre el socket de escucha y lo deja listo para aceptar conexiones."""
@@ -42,7 +44,7 @@ class Listener:
             try:
                 data, client_address = self.sock.recvfrom(RECV_BUFFER)
                 if not packet.is_valid(data):
-                    logger.debug(f"[{self.TAG}] accept: datagrama invalido de {client_address}, lo descarto")
+                    self.trace.invalid(client_address)
                     continue
                 flags = bytes([packet.get_header_flags(data)])
 
@@ -51,11 +53,9 @@ class Listener:
                     protocol_id = packet.get_header_protocol(data)
                     peer_class = self._transport_for(protocol_id)
                     if peer_class is None:
-                        logger.debug(f"[{self.TAG}] accept: SYN de {client_address} con protocolo "
-                                     f"{protocol_id} no soportado, lo descarto")
+                        self.trace.unsupported(client_address, protocol_id)
                         continue
-                    logger.debug(f"[{self.TAG}] accept: llego SYN de {client_address} (isn cliente={client_isn}, "
-                                 f"protocolo={peer_class.TAG})")
+                    self.trace.syn(client_address, client_isn, peer_class.TAG)
                     peer = self._accept_syn(client_address, client_isn, peer_class)
                     if peer is not None:
                         return peer
@@ -63,7 +63,7 @@ class Listener:
                 raise #que decida el llamador si sigue esperando (ver Dispatcher en server.py)
             except Exception as e:
                 if self.is_closed:
-                    logger.debug(f"[{self.TAG}] accept: el socket del servidor se cerro mientras esperaba conexiones")
+                    self.trace.closed()
                     raise ConnectionClosed(
                         "server closed while accepting a connection.")
                 raise e
@@ -94,8 +94,6 @@ class Listener:
         #tambien para poder mandar de nuevo
         client_sock.settimeout(self.timeout)
 
-        logger.debug(f"[{self.TAG}] accept: socket efimero {client_sock.getsockname()} dedicado a {client_address}")
-
         server_isn = 0  # TODO podria o deberia ser random, pero lo dejo en 0 para que sea mas facil
 
         #respondo con SYN=1, ACK=1, seq = server_isn, ack = client_isn+1
@@ -107,7 +105,8 @@ class Listener:
             ack=client_isn + 1
         )
 
-        logger.debug(f"[{self.TAG}] accept: envio SYN-ACK a {client_address} (isn servidor={server_isn})")
+        trace = AcceptTrace(self.TAG, client_address, client_sock.getsockname(),
+                            server_isn, self.max_retries)
 
         retries = 0
         while retries < self.max_retries:
@@ -116,7 +115,7 @@ class Listener:
                 #espero ACK del cliente y SYN=0
                 resp, addr = client_sock.recvfrom(RECV_BUFFER)
                 if addr != client_address or not packet.is_valid(resp):
-                    logger.debug(f"[{self.TAG}] accept: descarto respuesta de {addr} durante el handshake")
+                    trace.stray(addr)
                     continue
 
                 resp_flags = bytes([packet.get_header_flags(resp)])
@@ -126,18 +125,14 @@ class Listener:
                         peer = peer_class(client_address[0], client_address[1],
                                           sock=client_sock, remote_address=client_address)
                         peer._init_peer(server_isn + 1, client_isn + 1)
-                        logger.debug(f"[{self.TAG}] accept: conexion establecida con {client_address} "
-                                     f"(seq={peer.sequence_number}, "
-                                     f"seq esperado={peer.exp_sequence_number})")
+                        trace.established(peer.sequence_number, peer.exp_sequence_number)
                         return peer
-                    logger.debug(f"[{self.TAG}] accept: ACK final con ack={packet.get_header_ack(resp)}, "
-                                 f"esperaba {server_isn + 1}; lo descarto")
+                    trace.bad_ack(packet.get_header_ack(resp), server_isn + 1)
             except socket.timeout:
                 retries += 1
-                logger.debug(f"[{self.TAG}] accept: sin ACK final de {client_address}, "
-                             f"reenvio SYN-ACK ({retries}/{self.max_retries})")
+                trace.retransmit(retries)
 
-        logger.debug(f"[{self.TAG}] accept: handshake con {client_address} abandonado tras {self.max_retries} intentos")
+        trace.gave_up()
         return None
 
     def shutdown(self) -> None:

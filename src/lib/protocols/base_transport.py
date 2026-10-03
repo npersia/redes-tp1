@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from lib.logger.logger import logger
 import lib.protocols.packet.packet as packet
+from lib.protocols.handshake_trace import ConnectTrace
 
 
 # Valores por defecto del handshake. Los protocols sobre UDP los heredan tal
@@ -106,8 +107,8 @@ class BaseTransport(ABC):
 
         client_isn = self.sequence_number
 
-        logger.debug(f"[{self.TAG}] handshake: envio SYN a {self.host}:{self.port} (isn={client_isn}, "
-                     f"timeout {self.timeout}s, hasta {self.max_retries} intentos)")
+        trace = ConnectTrace(self.TAG, (self.host, self.port), client_isn,
+                             self.timeout, self.max_retries)
 
         # SYN=1, seq = client_isn
         syn_packet = packet.make_packet(
@@ -120,13 +121,13 @@ class BaseTransport(ABC):
         retries = 0
         while retries < self.max_retries:
             if self.cancel_requested.is_set():
-                logger.debug(f"[{self.TAG}] handshake cancelado por el usuario")
+                trace.cancelled()
                 raise TransferCancelled("Conexion cancelada por el usuario durante el handshake.")
             try:
                 self.sock.sendto(syn_packet, (self.host, self.port))
                 data, server_address = self.sock.recvfrom(RECV_BUFFER)
                 if not packet.is_valid(data):
-                    logger.debug(f"[{self.TAG}] handshake: datagrama invalido de {server_address}, lo descarto")
+                    trace.invalid(server_address)
                     continue
                 flags = bytes([packet.get_header_flags(data)])
 
@@ -136,8 +137,7 @@ class BaseTransport(ABC):
                         self.remote_address = server_address
                         server_isn = packet.get_header_sequence_paquet(data)
 
-                        logger.debug(f"[{self.TAG}] handshake: SYN-ACK de {server_address} (isn servidor={server_isn}); "
-                                     f"respondo el ACK final")
+                        trace.syn_ack(server_address, server_isn)
 
                         # SYN=0, seq=client_isn+1, ack = server_isn+1
                         ack_packet = packet.make_packet(
@@ -150,16 +150,15 @@ class BaseTransport(ABC):
 
                         self.sock.sendto(ack_packet, self.remote_address)
                         self._init_peer(client_isn + 1, server_isn + 1)
-                        logger.debug(f"[{self.TAG}] conexion establecida con {self.remote_address} "
-                                     f"(seq={self.sequence_number}, seq esperado={self.exp_sequence_number})")
+                        trace.established(self.remote_address, self.sequence_number,
+                                          self.exp_sequence_number)
                         return
-                    logger.debug(f"[{self.TAG}] handshake: SYN-ACK con ack={packet.get_header_ack(data)}, "
-                                 f"esperaba {client_isn + 1}; lo descarto")
+                    trace.bad_syn_ack(packet.get_header_ack(data))
             except socket.timeout:
                 retries += 1
-                logger.debug(f"[{self.TAG}] handshake: sin respuesta al SYN, reintento {retries}/{self.max_retries}")
+                trace.retry(retries)
 
-        logger.debug(f"[{self.TAG}] handshake fallido: {self.max_retries} intentos sin respuesta de {self.host}:{self.port}")
+        trace.failed()
         raise ConnectionClosed(
             f"Timeout: can't connect to {self.host}:{self.port}.")
 

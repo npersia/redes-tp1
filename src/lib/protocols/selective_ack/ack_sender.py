@@ -4,6 +4,12 @@ from lib.protocols.selective_ack.sack_option import covers
 
 DUP_ACKS_THRESHOLD = 3  # Duplicate ACKs needed before retransmitting.
 
+# What handle_ack() did with an ACK, so the caller can report it.
+NEW_ACK = "new"                  # it moved send_base forward
+STALE_ACK = "stale"              # older than send_base, or nothing in flight: ignored
+DUP_ACK = "duplicate"            # same ACK as before, counted towards the fast retransmit
+FAST_RETRANSMIT = "fast_retransmit"  # it reached the threshold: retransmit the hole
+
 
 class SentSegment:
 
@@ -69,7 +75,8 @@ class ACKSender:
             return segment
         return None
 
-    # Processes an ACK. Returns the segment to retransmit, or None.
+    # Processes an ACK. Returns the segment to retransmit (or None) and what
+    # was done with the ACK (one of the constants above).
     def handle_ack(self, ack, blocks):
         for segment in self.window:
             if covers(blocks, segment.seq, segment.end):
@@ -80,23 +87,24 @@ class ACKSender:
             self.send_base = ack
             self.dup_acks = 0
             self.window = [s for s in self.window if not self.is_acked(s)]
-            return None
+            return None, NEW_ACK
 
         if ack < self.send_base:
             # Stale ACK, ignored. It does not count as a duplicate.
-            return None
+            return None, STALE_ACK
 
         if not self.window:
-            return None
+            # Everything is acked already: a late copy, nothing to do.
+            return None, STALE_ACK
 
         # Same ACK as before: the receiver is telling us about a hole.
         self.dup_acks += 1
         if self.dup_acks < DUP_ACKS_THRESHOLD:
-            return None
+            return None, DUP_ACK
 
         # Reset the counter so we do not resend the same hole again.
         self.dup_acks = 0
-        return self.hole()
+        return self.hole(), FAST_RETRANSMIT
 
     # Returns the segment to retransmit if the oldest timer expired.
     def on_timeout(self):
