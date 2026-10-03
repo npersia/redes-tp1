@@ -20,7 +20,10 @@ class Dispatcher:
             while not shutdown_event.is_set():
                 try:
                     connection = transport.accept()
-                except socket.timeout:
+                except ConnectionClosed:
+                    break
+
+                if connection is None:
                     continue
 
                 thread = threading.Thread(

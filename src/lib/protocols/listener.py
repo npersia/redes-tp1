@@ -67,7 +67,7 @@ class Listener:
                     if peer is not None:
                         return peer
             except socket.timeout:
-                raise #que decida el llamador si sigue esperando (ver Dispatcher en server.py)
+                return None #todavía no llego nada
             except Exception as e:
                 if self.is_closed:
                     self.trace.closed()
