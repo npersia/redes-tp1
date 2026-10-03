@@ -1,17 +1,17 @@
 from lib.protocols.base_transport import BaseTransport
 from lib.protocols.tcp.tcp_transport import TCPTransport
 from lib.protocols.stop_and_wait.stop_wait import StopAndWait
-from lib.protocols.selective_ack.selective_ack import SelectiveACK
+from lib.protocols.selective_ack.selective_ack import SelectiveAck
 
 class TransportFactory:
     _PROTOCOLS = {
         "tcp": TCPTransport,
         "sw": StopAndWait,
-        "sack": SelectiveACK,
+        "sack": SelectiveAck,
     }
     _PROTOCOLS_BY_ID = {
         1: StopAndWait,
-        2: SelectiveACK,
+        2: SelectiveAck,
         3: TCPTransport,
     }
 
