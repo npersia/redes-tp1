@@ -6,9 +6,8 @@ from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_storage_dir, load_config
 from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
 from lib.logger.logger import configure, logger
-from lib.protocols.base_transport import ConnectionClosed
-from lib.protocols.factory import TransportFactory
-from lib.protocols.stop_and_wait.stop_wait import StopAndWait
+from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
+from lib.protocols.listener import Listener
 
 class Dispatcher:
     def __init__(self):
@@ -21,7 +20,10 @@ class Dispatcher:
             while not shutdown_event.is_set():
                 try:
                     connection = transport.accept()
-                except socket.timeout:
+                except ConnectionClosed:
+                    break
+
+                if connection is None:
                     continue
 
                 thread = threading.Thread(
@@ -34,6 +36,8 @@ class Dispatcher:
                     self.threads.append(thread)
 
                 thread.start()
+                logger.debug(f"[Servidor] hilo {thread.name} atendiendo a {connection.remote_address}; "
+                             f"{len(self.threads)} conexion(es) activa(s)")
         finally:
             transport.close()
             self._stop()
@@ -41,6 +45,8 @@ class Dispatcher:
     def _worker(self, connection, storage_dir, handler):
         try:
             handler(connection, storage_dir, self.stopping)
+        except TransferCancelled as cancelled:
+            logger.info(f"[Servidor] {cancelled}")
         except (ConnectionClosed, OSError) as error:
             if self.stopping.is_set():
                 logger.info("[Servidor] Transferencia cancelada por cierre del servidor.")
@@ -57,8 +63,9 @@ class Dispatcher:
         with self.lock:
             active_threads = list(self.threads)
 
+        logger.debug(f"[Servidor] cerrando: {len(active_threads)} transferencia(s) en curso a abortar")
         for thread in active_threads:
-            thread.connection.shutdown() #Esto todavía no sucede
+            thread.connection.shutdown() #avisa ERR+CANCEL y recien despues cierra
 
         for thread in active_threads:
             thread.join()
@@ -113,8 +120,7 @@ def handle_connection(connection, storage_dir, stopping):
 
 
 def run_server(arguments, storage_dir,shutdown_event):
-    # TODO: Cuando se implemente SACK cambiar la fima de metodo segun el protocolo q
-    transport = StopAndWait(arguments.host, arguments.port)
+    transport = Listener(arguments.host, arguments.port)
     transport.start_server()
     logger.info(f"[Servidor] Esperando recibir archivos en {arguments.host}:{arguments.port}...")
     dispatcher = Dispatcher()

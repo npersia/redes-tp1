@@ -35,11 +35,12 @@ Fields:
         8 bits.
         Examples:
             7 6 5 4 3 2 1 0
-            7: SYN - initialization / negotiation
-            6: FIN - end of transfer
-            5: ERR - error in packet
-            4: ACK 
-            3 - 0: reserved for future use
+            7: SYN    - initialization / negotiation
+            6: FIN    - end of transfer
+            5: ERR    - error in packet
+            4: ACK    - acknowledge of packet
+            3: CAN - cancel of transfer
+            2 - 0: reserved for future use
 
     HLEN:
         Header length (in bytes).
@@ -68,12 +69,21 @@ x - 40 Bytes = maximum size of payload that can be sent by the application using
 # Estas funciones se basan en utilizar funciones de bytes
 # Como AND, SHIFT, etc. Aprovechando que estamos trabajando con bytes.
 
+HEADER_SIZE = 12
+
 SYN_MASK = 0b10000000
 FIN_MASK = 0b01000000
 ERR_MASK = 0b00100000
 ACK_MASK = 0b00010000
+CANCEL_MASK = 0b00001000
 
 
+
+
+def is_valid(packet: bytes) -> bool:
+    """Verifica que el datagrama se pueda interpretar como paquete RDT."""
+    return (len(packet) >= HEADER_SIZE
+            and HEADER_SIZE <= get_header_hlen(packet) <= len(packet))
 
 
 def get_header_version(packet: bytes) -> int:
@@ -121,6 +131,27 @@ def get_flag_ACK(flags: bytes) -> int:
     return (flags[0] >> 4) & 1
 
 
+def get_flag_CANCEL(flags: bytes) -> int:
+    """Get the flag CANCEL from the flags of the packet."""
+    return (flags[0] >> 3) & 1
+
+
+def flag_names(flags: bytes) -> str:
+    """Return the flags that are set as readable text, for the logs."""
+    set_flags = [
+        name
+        for name, is_set in (
+            ("SYN", get_flag_SYN(flags)),
+            ("FIN", get_flag_FIN(flags)),
+            ("ERR", get_flag_ERR(flags)),
+            ("ACK", get_flag_ACK(flags)),
+            ("CANCEL", get_flag_CANCEL(flags)),
+        )
+        if is_set
+    ]
+    return "+".join(set_flags) if set_flags else "-"
+
+
 def get_header_hlen(packet: bytes) -> int:
     return packet[2]
 
@@ -129,8 +160,8 @@ def get_header_options(packet: bytes) -> bytes:
 
     hlen = get_header_hlen(packet)
 
-    if hlen > 12:
-        return packet[12:hlen]
+    if hlen > HEADER_SIZE:
+        return packet[HEADER_SIZE:hlen]
     return b"" #No options
 
     # TODO: definir una variable en lugar de 12
@@ -156,8 +187,7 @@ def get_payload(packet: bytes) -> bytes:
 def make_packet(version=0, protocol=0,flags=0,
                  sequence_number=0, ack=0, options=b"", payload=b"") -> bytes:
     """Build the RDT packet"""
-    hlen = 12
-    total_hlen = hlen + len(options)
+    total_hlen = HEADER_SIZE + len(options)
     # fuerzo a que ambos valores usen medio byte en la seccion correspondiente
     version_bites = version & 0b00001111
     protocol_bites = protocol & 0b00001111
