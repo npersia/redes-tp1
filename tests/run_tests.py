@@ -23,6 +23,11 @@ for ruta in (SRC, AQUI):
 OBJETIVOS = [
     os.path.join(SRC, "lib", "protocols", "stop_and_wait", "stop_wait.py"),
     os.path.join(SRC, "lib", "protocols", "packet", "packet.py"),
+    os.path.join(SRC, "lib", "protocols", "selective_ack", "sack_option.py"),
+    os.path.join(SRC, "lib", "protocols", "selective_ack", "ack_receiver.py"),
+    os.path.join(SRC, "lib", "protocols", "selective_ack", "ack_sender.py"),
+    os.path.join(SRC, "lib", "protocols", "selective_ack", "selective_ack.py"),
+    os.path.join(SRC, "lib", "protocols", "selective_ack", "trace.py"),
 ]
 
 

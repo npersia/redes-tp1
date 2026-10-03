@@ -1,4 +1,5 @@
 import socket
+import time
 
 from lib.protocols.base_transport import (
     RECV_BUFFER,
@@ -6,6 +7,7 @@ from lib.protocols.base_transport import (
     VERSION,
     BaseTransport,
     ConnectionClosed,
+    TransferCancelled,
 )
 import lib.protocols.packet.packet as packet
 from lib.protocols.selective_ack.ack_receiver import ACKReceiver
@@ -65,13 +67,21 @@ class SelectiveAck(BaseTransport):
         # _wait_event, _handle_ack y _retransmit narran sobre el mismo send()
         self._send_trace = SackSendTrace(len(data), total, MAX_PAYLOAD_SIZE, CWND,
                                          self.remote_address, self.sender.send_base)
+        # The socket is taken once: a close() from another thread sets
+        # self.sock to None, and this one fails with OSError instead.
+        self._send_sock = self.sock
 
         while sent < total or not self.sender.is_idle:
+            if self.cancel_requested.is_set():
+                self.notify_abort()
+                self._send_trace.cancelled()
+                raise TransferCancelled(
+                    f"Transferencia cancelada por el usuario: {self._send_trace.balance}.")
+
             while sent < total and self.sender.has_room():
                 flags = packet.FIN_MASK if sent == total - 1 else 0
                 segment = self.sender.add(chunks[sent], flags)
-                self.sock.sendto(self._data_packet(segment),
-                                 self.remote_address)
+                self._sendto(self._send_sock, self._data_packet(segment), self._send_trace)
                 self._send_trace.segment_sent()
                 sent += 1
 
@@ -86,7 +96,7 @@ class SelectiveAck(BaseTransport):
     def _wait_event(self) -> None:
         data = None
         try:
-            data, addr = self.sock.recvfrom(RECV_BUFFER)
+            data, addr = self._send_sock.recvfrom(RECV_BUFFER)
         except socket.timeout:
             data = None
         except OSError as error:
@@ -95,8 +105,11 @@ class SelectiveAck(BaseTransport):
                 raise ConnectionClosed("Connection closed.")
             raise error
 
-        if data is not None and addr == self.remote_address:
-            self._handle_ack(data)
+        if data is not None:
+            if addr != self.remote_address or not packet.is_valid(data):
+                self._send_trace.stray(addr, addr == self.remote_address)
+            else:
+                self._handle_ack(data)
 
         expired = self.sender.on_timeout()
         if expired is not None:
@@ -108,6 +121,10 @@ class SelectiveAck(BaseTransport):
         flags = self._flags(data)
 
         if packet.get_flag_ERR(flags):
+            if packet.get_flag_CANCEL(flags):
+                self._send_trace.remote_cancel()
+                raise TransferCancelled(
+                    f"El otro extremo canceló la transferencia: {self._send_trace.balance}.")
             self._send_trace.remote_error()
             raise ConnectionClosed("Remote reported an error (ERR flag).")
 
@@ -130,7 +147,7 @@ class SelectiveAck(BaseTransport):
             raise ConnectionClosed(
                 f"Too many retries for seq={segment.seq}.")
 
-        self.sock.sendto(self._data_packet(segment), self.remote_address)
+        self._sendto(self._send_sock, self._data_packet(segment), self._send_trace)
         segment.refresh(self.sender.timeout)
         self._send_trace.retransmit(segment.seq, fast, segment.retries,
                                     self.max_retries)
@@ -149,9 +166,30 @@ class SelectiveAck(BaseTransport):
 
         trace = SackRecvTrace(self.remote_address, self.receiver.rcv_next, RWIND)
 
+        # If the peer sends nothing valid for this long, it is gone: it is what
+        # the sender takes to exhaust its retries on one segment, plus a margin.
+        # Every datagram from the peer (even a duplicate) restarts the count.
+        # It only starts counting with the first data segment: before that the
+        # sender may still be loading a big file into memory.
+        silence_limit = self.timeout * (self.max_retries + 2)
+        last_heard = time.monotonic()
+        data_started = False
+        sock = self.sock  # same as in send(): survives a concurrent close()
+
         while True:
+            if self.cancel_requested.is_set():
+                self.notify_abort()
+                trace.cancelled()
+                raise TransferCancelled(
+                    f"Recepcion cancelada por el usuario: {trace.bytes} bytes recibidos.")
+
+            if data_started and time.monotonic() - last_heard > silence_limit:
+                trace.silence(silence_limit)
+                raise ConnectionClosed(
+                    f"The remote sent nothing for {silence_limit:.1f}s.")
+
             try:
-                data, addr = self.sock.recvfrom(RECV_BUFFER)
+                data, addr = sock.recvfrom(RECV_BUFFER)
             except socket.timeout:
                 if self.is_closed:
                     trace.closed()
@@ -163,13 +201,19 @@ class SelectiveAck(BaseTransport):
                     raise ConnectionClosed("Connection closed.")
                 raise error
 
-            if addr != self.remote_address:
-                trace.stray(addr)
+            if addr != self.remote_address or not packet.is_valid(data):
+                trace.stray(addr, addr == self.remote_address)
                 continue
 
+            last_heard = time.monotonic()
             flags = self._flags(data)
 
             if packet.get_flag_ERR(flags):
+                if packet.get_flag_CANCEL(flags):
+                    trace.remote_cancel()
+                    raise TransferCancelled(
+                        f"El otro extremo canceló la transferencia: "
+                        f"{trace.bytes} bytes recibidos.")
                 trace.remote_error()
                 raise ConnectionClosed(
                     "Transfer aborted by a remote error (ERR flag).")
@@ -177,7 +221,7 @@ class SelectiveAck(BaseTransport):
             # Our ACK was lost, so the peer is resending the SYN-ACK
             if packet.get_flag_SYN(flags) and packet.get_flag_ACK(flags):
                 trace.syn_ack_again()
-                self.sock.sendto(self._ack_packet(), self.remote_address)
+                self._sendto(sock, self._ack_packet(), trace)
                 continue
 
             payload = packet.get_payload(data)
@@ -186,13 +230,17 @@ class SelectiveAck(BaseTransport):
             if not payload and not is_fin:
                 continue  # pure ACK, not a data segment
 
+            data_started = True
+
             seq = packet.get_header_sequence_paquet(data)
             # A FIN with no payload (empty file) advances 1, same as SW
             n_bytes = len(payload) if payload else 1
 
             delivered, status = self.receiver.accept(seq, n_bytes, payload)
             received.extend(delivered)
-            self.sock.sendto(self._ack_packet(), self.remote_address)
+            # notify_abort() (BaseTransport) puts this in the ack of the ERR
+            self.exp_sequence_number = self.receiver.rcv_next
+            self._sendto(sock, self._ack_packet(), trace)
 
             if is_fin and fin_end is None:
                 fin_end = seq + n_bytes
@@ -212,6 +260,16 @@ class SelectiveAck(BaseTransport):
     ###########################################################################
     # Packet assembly
     ###########################################################################
+
+    def _sendto(self, sock, data: bytes, trace) -> None:
+        """sendto() that turns the error of a closed connection into ConnectionClosed."""
+        try:
+            sock.sendto(data, self.remote_address)
+        except OSError:
+            if self.is_closed:
+                trace.closed()
+                raise ConnectionClosed("Connection closed.")
+            raise
 
     @staticmethod
     def _flags(data: bytes) -> bytes:

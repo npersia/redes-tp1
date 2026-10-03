@@ -345,6 +345,124 @@ class RawPeer:
             self.sock.close()
 
 
+# ---------------------------------------------------------------------------
+# Politicas para Selective ACK
+#
+# En SACK los segmentos de datos tambien llevan el flag ACK (el ACK
+# acumulativo viaja en cada dato), y el FIN de un archivo vacio no tiene
+# payload: "ACK sin payload" no alcanza para separar datos de ACKs puros.
+# ---------------------------------------------------------------------------
+
+def es_dato_sack_pkt(p):
+    """Segmento de datos de SACK: trae payload o FIN (y no es del handshake)."""
+    return not p["SYN"] and not p["ERR"] and (bool(p["payload"]) or bool(p["FIN"]))
+
+
+def es_ack_puro_sack_pkt(p):
+    return p["ACK"] and not p["SYN"] and not p["ERR"] and not es_dato_sack_pkt(p)
+
+
+def drop_seq(seq, veces=1):
+    """Tira las primeras `veces` copias del segmento de datos `seq` (incluye retransmisiones)."""
+    restantes = {"n": veces}
+
+    def politica(ctx):
+        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] == seq and restantes["n"] > 0:
+            restantes["n"] -= 1
+            return DROP
+        return PASS
+
+    return politica
+
+
+def drop_seqs(*seqs):
+    """Tira la primera copia de cada segmento de datos cuyo seq este en `seqs`."""
+    pendientes = set(seqs)
+
+    def politica(ctx):
+        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] in pendientes:
+            pendientes.discard(ctx.pkt["seq"])
+            return DROP
+        return PASS
+
+    return politica
+
+
+def drop_datos_sack_nth(*indices):
+    """Tira el n-esimo segmento de datos que sale (1-based, cuenta retransmisiones)."""
+    objetivo = set(indices)
+    contador = {"n": 0}
+
+    def politica(ctx):
+        if not es_dato_sack_pkt(ctx.pkt):
+            return PASS
+        contador["n"] += 1
+        return DROP if contador["n"] in objetivo else PASS
+
+    return politica
+
+
+def drop_rango_datos(desde, hasta):
+    """Rafaga: tira los segmentos de datos que salen en las posiciones desde..hasta (inclusive)."""
+    return drop_datos_sack_nth(*range(desde, hasta + 1))
+
+
+def drop_acks_sack_nth(*indices):
+    """Tira el n-esimo ACK puro de SACK (los segmentos de datos no cuentan)."""
+    objetivo = set(indices)
+    contador = {"n": 0}
+
+    def politica(ctx):
+        if not es_ack_puro_sack_pkt(ctx.pkt):
+            return PASS
+        contador["n"] += 1
+        return DROP if contador["n"] in objetivo else PASS
+
+    return politica
+
+
+def drop_todos_los_acks_sack():
+    return lambda ctx: DROP if es_ack_puro_sack_pkt(ctx.pkt) else PASS
+
+
+def delay_seq(seq, segundos):
+    """Demora la primera copia del segmento `seq`: llega despues que los siguientes."""
+    pendiente = {"si": True}
+
+    def politica(ctx):
+        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] == seq and pendiente["si"]:
+            pendiente["si"] = False
+            return ("delay", segundos)
+        return PASS
+
+    return politica
+
+
+def dup_seq(seq):
+    """Duplica la primera copia del segmento `seq` en el cable."""
+    pendiente = {"si": True}
+
+    def politica(ctx):
+        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] == seq and pendiente["si"]:
+            pendiente["si"] = False
+            return DUP
+        return PASS
+
+    return politica
+
+
+def todas(*politicas):
+    """Encadena politicas: la primera que no devuelve PASS decide.
+
+    Todas ven cada paquete aunque una anterior ya haya decidido, porque varias
+    llevan contadores ("el n-esimo dato") que no pueden saltearse ninguno.
+    """
+    def politica(ctx):
+        acciones = [p(ctx) or PASS for p in politicas]
+        return next((a for a in acciones if a != PASS), PASS)
+    return politica
+
+
 def salvo(pred, politica):
     """Aplica `politica` salvo cuando `pred(ctx)` es verdadero (ahi deja pasar)."""
     return lambda ctx: PASS if pred(ctx) else politica(ctx)

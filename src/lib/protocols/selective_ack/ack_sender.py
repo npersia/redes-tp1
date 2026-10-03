@@ -21,10 +21,12 @@ class SentSegment:
         self.retries = 0
         self.sacked = False
 
-    # The first sequence number after this segment.
+    # The first sequence number after this segment. A segment with no payload
+    # (the FIN of an empty file) still takes 1, like in the receiver: otherwise
+    # it would count as acked before its ACK and never be retransmitted.
     @property
     def end(self):
-        return self.seq + len(self.payload)
+        return self.seq + (len(self.payload) or 1)
 
     # Restarts the timer and counts one more attempt.
     def refresh(self, timeout):
@@ -60,8 +62,7 @@ class ACKSender:
     def add(self, payload, flags):
         segment = SentSegment(self.next_seq, payload, flags, self.timeout)
         self.window.append(segment)
-        # A segment with no payload (a FIN for an empty file) advances 1.
-        self.next_seq = segment.end if payload else segment.seq + 1
+        self.next_seq = segment.end
         return segment
 
     def is_acked(self, segment):

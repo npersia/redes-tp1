@@ -72,8 +72,18 @@ class SackSendTrace(Trace):
             motivo = "timeout"
         self.log(f"{motivo}: retransmito seq={seq} ({intento}/{tope})")
 
+    def stray(self, addr, mismo_origen):
+        motivo = "paquete invalido" if mismo_origen else "origen inesperado"
+        self.log(f"descarto datagrama de {addr} mientras esperaba ACKs ({motivo})")
+
     def remote_error(self):
         self.log(f"el remoto respondio ERR; se aborta con {self.balance}")
+
+    def remote_cancel(self):
+        self.log(f"el remoto cancelo a proposito; se aborta con {self.balance}")
+
+    def cancelled(self):
+        self.log(f"cancelado por el usuario con {self.balance}")
 
     def gave_up(self, seq, tope):
         self.log(f"se agotaron los {tope} reintentos en seq={seq}; corto la transferencia con {self.balance}")
@@ -100,11 +110,22 @@ class SackRecvTrace(Trace):
         self.log(f"recv: esperando datos de {remote} (seq esperado {expected_seq}, "
                  f"ventana de recepcion {rwind} B)")
 
-    def stray(self, addr):
-        self.log(f"descarto datagrama de {addr} (origen inesperado)")
+    def stray(self, addr, mismo_origen):
+        motivo = "paquete invalido" if mismo_origen else "origen inesperado"
+        self.log(f"descarto datagrama de {addr} ({motivo})")
+
+    def silence(self, limite):
+        self.log(f"{self.remote} no mando nada valido en {limite:.1f}s; "
+                 f"se abandona con {self.bytes} bytes recibidos")
 
     def remote_error(self):
         self.log(f"llego ERR del remoto tras {self.bytes} bytes; se aborta")
+
+    def remote_cancel(self):
+        self.log(f"el remoto cancelo a proposito tras {self.bytes} bytes; se aborta")
+
+    def cancelled(self):
+        self.log(f"recepcion cancelada por el usuario con {self.bytes} bytes recibidos")
 
     def syn_ack_again(self):
         self.log("SYN-ACK retransmitido, reenvio el ACK del handshake")

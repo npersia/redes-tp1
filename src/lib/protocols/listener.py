@@ -23,6 +23,8 @@ class Listener:
         self.port = int(port)
         self.sock = None
         self.is_closed = True
+        # Distingue "nunca escucho" de "ya se cerro": en los dos sock es None.
+        self.started = False
         # se leen del modulo al crear el listener, igual que en BaseTransport
         self.timeout = base_transport.TIMEOUT
         self.max_retries = base_transport.MAX_RETRIES
@@ -34,15 +36,20 @@ class Listener:
         self.sock.bind((self.host, self.port))
         self.sock.settimeout(self.timeout) #sin esto accept() bloquea para siempre y el servidor no se puede apagar
         self.is_closed = False
+        self.started = True
 
     def accept(self) -> base_transport.BaseTransport:
         """Espera el SYN de un cliente y devuelve la conexion ya establecida."""
-        if not self.sock:
+        if not self.started:
             raise RuntimeError("No server initialized.")
+
+        # Se toma una sola vez: un close() de otro hilo deja self.sock en None,
+        # y este queda cerrado (recvfrom da OSError -> ConnectionClosed).
+        sock = self.sock
 
         while not self.is_closed:
             try:
-                data, client_address = self.sock.recvfrom(RECV_BUFFER)
+                data, client_address = sock.recvfrom(RECV_BUFFER)
                 if not packet.is_valid(data):
                     self.trace.invalid(client_address)
                     continue

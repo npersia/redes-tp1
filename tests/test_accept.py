@@ -318,6 +318,31 @@ class TestAccept(SWTestCase):
         with self.assertRaises(ConnectionClosed):
             servidor.accept()
 
+    def test_accept_despues_de_cerrar_es_connectionclosed(self):
+        """Lo que pasa si el shutdown cae entre dos llamadas a accept().
+
+        Es la carrera de test_shutdown_corta_el_accept sin depender del
+        scheduler: close() suelta el socket (sock=None) y eso no tiene que
+        confundirse con "nunca se inicio".
+        """
+        servidor = self.servidor()
+        servidor.close()
+        with self.assertRaises(ConnectionClosed):
+            servidor.accept()
+
+    def test_accept_despues_de_shutdown_es_connectionclosed(self):
+        servidor = self.servidor()
+        servidor.shutdown()
+        with self.assertRaises(ConnectionClosed):
+            servidor.accept()
+
+    def test_sin_iniciar_sigue_siendo_runtimeerror_aunque_se_cierre(self):
+        """Cerrar un listener que nunca escucho no lo convierte en 'cerrado'."""
+        s = listener.Listener(HOST, 9999)
+        s.close()
+        with self.assertRaises(RuntimeError):
+            s.accept()
+
 
 if __name__ == "__main__":
     unittest.main()
