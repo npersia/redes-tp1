@@ -1,7 +1,13 @@
 import socket
 
 from lib.logger.logger import logger
-from lib.protocols.base_transport import BaseTransport, ConnectionClosed
+from lib.protocols.base_transport import (
+    RECV_BUFFER,
+    TIMEOUT,
+    VERSION,
+    BaseTransport,
+    ConnectionClosed,
+)
 import lib.protocols.packet.packet as packet
 from lib.protocols.selective_ack.ack_receiver import ACKReceiver
 from lib.protocols.selective_ack.ack_sender import ACKSender
@@ -13,160 +19,24 @@ from lib.protocols.selective_ack.sack_option import (
 
 
 # CONSTANTS
-TIMEOUT = 1.0
-PROTOCOL_SELECTIVE_ACK = 2  # value in the protocol field of the header
-VERSION = 1
-MAX_RETRIES = 10
 MAX_PAYLOAD_SIZE = 1400
 
 CWND = 4
 # in bytes
 RWIND = CWND * MAX_PAYLOAD_SIZE
 
-RECV_BUFFER = 2048
 POLL_INTERVAL = 0.05  # socket poll granularity used by send()
 
 
 class SelectiveAck(BaseTransport):
-
-    def __init__(self, host: str, port: int, sock: socket.socket = None,
-                 remote_address: tuple = None):
-        self.host = host
-        self.port = int(port)
-        self.sock = sock
-        self.remote_address = remote_address or (host, port)
-
-        self.sequence_number = 0  # TODO should be random
-        self.exp_sequence_number = 0  # TODO should be random
-        self.is_closed = True
-        self.timeout = TIMEOUT
-        self.max_retries = MAX_RETRIES
-
-        self.sender = None
-        self.receiver = None
+    PROTOCOL_ID = 2
 
     ###########################################################################
-    # Here starts the handshake, should be moved to BaseTransport
+    # Here ends the handshake, it is already in BaseTransport
     ###########################################################################
-
-    # Open the listening socket. The real accept() happens in accept().
-    def start_server(self) -> None:
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((self.host, self.port))
-        self.is_closed = False
-
-    def accept(self) -> "SelectiveAck":
-        """Server side: wait for the SYN and open an ephemeral socket."""
-        if not self.sock:
-            raise RuntimeError("No server initialized.")
-
-        while not self.is_closed:
-            try:
-                # 2048 is way above the classic 1500 MTU
-                data, client_address = self.sock.recvfrom(RECV_BUFFER)
-                flags = bytes([packet.get_header_flags(data)])
-
-                if packet.get_flag_SYN(flags):
-                    client_isn = packet.get_header_sequence_paquet(data)
-
-                    # Ephemeral socket, used only with this client
-                    client_sock = socket.socket(socket.AF_INET,
-                                                socket.SOCK_DGRAM)
-                    # 0 lets the OS pick a free port
-                    client_sock.bind((self.host, 0))
-                    client_sock.settimeout(self.timeout)
-
-                    server_isn = 0
-
-                    syn_packet = packet.make_packet(
-                        version=VERSION,
-                        protocol=PROTOCOL_SELECTIVE_ACK,
-                        flags=packet.SYN_MASK | packet.ACK_MASK,
-                        sequence_number=server_isn,
-                        ack=client_isn + 1
-                    )
-
-                    retries = 0
-                    while retries < self.max_retries:
-                        client_sock.sendto(syn_packet, client_address)
-                        try:
-                            resp, addr = client_sock.recvfrom(RECV_BUFFER)
-                            if addr != client_address:
-                                continue
-
-                            resp_flags = bytes(
-                                [packet.get_header_flags(resp)])
-
-                            if not packet.get_flag_SYN(resp_flags):
-                                if (packet.get_header_ack(resp)
-                                        == server_isn + 1):
-                                    return self._make_peer(
-                                        client_address, client_sock,
-                                        server_isn + 1, client_isn + 1)
-                        except socket.timeout:
-                            retries += 1
-            except socket.timeout:
-                continue
-            except Exception as e:
-                if self.is_closed:
-                    raise ConnectionClosed(
-                        "server closed while accepting a connection.")
-                raise e
-        raise ConnectionClosed("Server closed.")
-
-    def connect(self) -> None:
-        """Client side: 3-way handshake."""
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(self.timeout)
-
-        client_isn = self.sequence_number
-
-        syn_packet = packet.make_packet(
-            version=VERSION,
-            protocol=PROTOCOL_SELECTIVE_ACK,
-            flags=packet.SYN_MASK,
-            sequence_number=client_isn
-        )
-
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                self.sock.sendto(syn_packet, (self.host, self.port))
-                data, server_address = self.sock.recvfrom(RECV_BUFFER)
-                flags = bytes([packet.get_header_flags(data)])
-
-                if packet.get_flag_SYN(flags) and packet.get_flag_ACK(flags):
-                    if packet.get_header_ack(data) == client_isn + 1:
-                        self.remote_address = server_address
-                        server_isn = packet.get_header_sequence_paquet(data)
-
-                        ack_packet = packet.make_packet(
-                            version=VERSION,
-                            protocol=PROTOCOL_SELECTIVE_ACK,
-                            flags=packet.ACK_MASK,  # SYN already consumed
-                            sequence_number=client_isn + 1,
-                            ack=server_isn + 1
-                        )
-
-                        self.sock.sendto(ack_packet, self.remote_address)
-                        self._init_peer(client_isn + 1, server_isn + 1)
-                        return
-            except socket.timeout:
-                retries += 1
-
-        raise ConnectionClosed(
-            f"Timeout: can't connect to {self.host}:{self.port}.")
-
-    def _make_peer(self, address, sock, sequence_number, exp_sequence_number):
-        """Builds the other end of an already established connection."""
-        peer = SelectiveAck(address[0], address[1], sock=sock,
-                            remote_address=address)
-        peer._init_peer(sequence_number, exp_sequence_number)
-        return peer
 
     # Puts the session in a state ready to send and receive data.
     def _init_peer(self, sequence_number, exp_sequence_number) -> None:
-
         self.sequence_number = sequence_number
         self.exp_sequence_number = exp_sequence_number
         self.sender = ACKSender(sequence_number, CWND, self.timeout)
@@ -175,7 +45,7 @@ class SelectiveAck(BaseTransport):
         self.is_closed = False
 
     ###########################################################################
-    # Here ends the handshake, should be moved to BaseTransport
+    # Here starts the data transfer
     ###########################################################################
 
     # Send all the data, respecting the window, and wait for ACKs.
@@ -333,24 +203,6 @@ class SelectiveAck(BaseTransport):
                     f"[SACK] Transfer received: {len(received)} bytes")
                 return bytes(received)
 
-    ###########################################################################
-    # Here starts the shutdown, should be moved to BaseTransport
-    ###########################################################################
-
-    def shutdown(self) -> None:
-        self.is_closed = True
-        if self.sock:
-            try:
-                self.sock.close()
-            except Exception:
-                pass
-
-    def close(self) -> None:
-        self.shutdown()
-
-    ###########################################################################
-    # Here ends the shutdown, should be moved to BaseTransport
-    ###########################################################################
 
     ###########################################################################
     # Packet assembly
@@ -369,7 +221,7 @@ class SelectiveAck(BaseTransport):
         """
         return packet.make_packet(
             version=VERSION,
-            protocol=PROTOCOL_SELECTIVE_ACK,
+            protocol=self.PROTOCOL_ID,
             flags=segment.flags | packet.ACK_MASK,
             sequence_number=segment.seq,
             ack=self.receiver.rcv_next,
@@ -380,7 +232,7 @@ class SelectiveAck(BaseTransport):
         """A cumulative ACK plus the SACK blocks the receiver holds."""
         return packet.make_packet(
             version=VERSION,
-            protocol=PROTOCOL_SELECTIVE_ACK,
+            protocol=self.PROTOCOL_ID,
             flags=packet.ACK_MASK,
             sequence_number=self.sequence_number,
             ack=self.receiver.rcv_next,
