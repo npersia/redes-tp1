@@ -1,6 +1,6 @@
 # Suite de pruebas de Stop & Wait y Selective ACK
 
-402 tests, sin dependencias externas (solo `unittest` y `trace` de la stdlib).
+418 tests, sin dependencias externas (solo `unittest` y `trace` de la stdlib).
 
 ```bash
 python3 tests/run_tests.py              # correr todo
@@ -42,6 +42,7 @@ test que falla.
 | `test_packet.py` | Serializado de la cabecera: flags, hlen, seq/ack, opciones, payload. |
 | `test_connect.py` | Handshake lado cliente: retransmision del SYN, SYN-ACK invalidos, agotamiento de reintentos. |
 | `test_accept.py` | Handshake lado servidor: socket efimero, retransmision del SYN-ACK, SYN duplicados, apagado. |
+| `test_version.py` | Version del protocolo en el handshake: `connect()` aborta con `UnsupportedVersion`, el `Listener` rechaza el SYN con ERR y sigue escuchando. |
 | `test_send.py` | Chunking, FIN, avance del seq, retransmision, ACK viejos/ajenos, ERR, agotamiento. |
 | `test_recv.py` | Reensamblado, duplicados, huecos, ACK acumulativo, ERR, cierre. |
 | `test_e2e.py` | Cliente y servidor reales con perdida determinista y aleatoria reproducible. |

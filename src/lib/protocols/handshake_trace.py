@@ -21,6 +21,12 @@ class ListenTrace(Trace):
             f"soportado, lo descarto"
         )
 
+    def bad_version(self, addr, version):
+        self.log(
+            f"accept: SYN de {addr} con version {version} no soportada, "
+            f"lo rechazo con ERR"
+        )
+
     def syn(self, addr, client_isn, protocol):
         self.log(
             f"accept: llego SYN de {addr} (isn cliente={client_isn}, "
@@ -92,6 +98,12 @@ class ConnectTrace(Trace):
 
     def invalid(self, addr):
         self.log(f"handshake: datagrama invalido de {addr}, lo descarto")
+
+    def bad_version(self, addr, version, expected):
+        self.log(
+            f"handshake: respuesta de {addr} con version {version}, "
+            f"esperaba {expected}; abandono"
+        )
 
     def syn_ack(self, addr, server_isn):
         self.log(

@@ -62,6 +62,15 @@ class Listener:
                 if packet.get_flag_SYN(flags):
                     client_isn = packet.get_header_sequence_paquet(data)
                     protocol_id = packet.get_header_protocol(data)
+                    # va antes que el protocolo: con otra version ese nibble
+                    # puede significar otra cosa
+                    version = packet.get_header_version(data)
+                    if version != VERSION:
+                        self.trace.bad_version(client_address, version)
+                        self._reject_version(
+                            sock, client_address, client_isn, protocol_id
+                        )
+                        continue
                     peer_class = self._transport_for(protocol_id)
                     if peer_class is None:
                         self.trace.unsupported(client_address, protocol_id)
@@ -95,6 +104,22 @@ class Listener:
         if peer_class is None or peer_class.PROTOCOL_ID != protocol_id:
             return None
         return peer_class
+
+    @staticmethod
+    def _reject_version(sock, client_address, client_isn, protocol_id):
+        """Le avisa al cliente con un ERR que su version no es la nuestra.
+
+        Sale del socket de escucha: no hay conexion, asi que no se abre
+        socket efimero. Lleva nuestra VERSION, que es como el cliente se
+        entera de que no coinciden, y su connect() corta sin reintentar.
+        """
+        err_packet = packet.make_packet(
+            version=VERSION,
+            protocol=protocol_id,
+            flags=packet.ERR_MASK,
+            ack=client_isn + 1,
+        )
+        sock.sendto(err_packet, client_address)
 
     def _accept_syn(self, client_address, client_isn, peer_class):
         """Completa el handshake de un SYN ya leido de la red.

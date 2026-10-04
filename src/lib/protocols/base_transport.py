@@ -30,6 +30,20 @@ class TransferCancelled(ConnectionClosed):
     """
 
 
+class UnsupportedVersion(ConnectionClosed):
+    """El otro extremo habla otra version del protocolo. Se detecta en el
+    handshake: del lado cliente por la respuesta al SYN, del lado servidor
+    por el SYN (el Listener lo rechaza con un ERR)."""
+
+    def __init__(self, received, expected):
+        super().__init__(
+            f"Versión de protocolo no soportada: llegó {received}, "
+            f"se esperaba {expected}."
+        )
+        self.received = received
+        self.expected = expected
+
+
 class BaseTransport(ABC):
     """Transporte confiable sobre datagramas.
 
@@ -153,6 +167,16 @@ class BaseTransport(ABC):
                 if not packet.is_valid(data):
                     trace.invalid(server_address)
                     continue
+
+                # Cualquier respuesta con otra version corta, incluido el ERR
+                # con que el Listener rechaza la nuestra: reintentar no sirve.
+                version = packet.get_header_version(data)
+                if version != VERSION:
+                    trace.bad_version(server_address, version, VERSION)
+                    raise UnsupportedVersion(
+                        received=version, expected=VERSION
+                    )
+
                 flags = bytes([packet.get_header_flags(data)])
 
                 # SYN=1, ACK=1, ack = client_isn+1
