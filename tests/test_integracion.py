@@ -215,7 +215,12 @@ class TestDispatcher(SWTestCase):
         for i in range(3):
             cliente = self.cliente(puerto)
             cliente.connect()
-            cliente.send(f"UPLOAD salida.bin\ncliente-{i}".encode())
+            cuerpo = f"cliente-{i}".encode()
+            cliente.send(f"UPLOAD {len(cuerpo)} salida.bin".encode())
+            respuesta = Hilo(cliente.recv)
+            respuesta.start()
+            self.assertEqual(respuesta.resultado_o_error(5.0), b"OK")
+            cliente.send(cuerpo)
             cliente.close()
 
         time.sleep(0.3)

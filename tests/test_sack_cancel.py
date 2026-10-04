@@ -370,8 +370,15 @@ class TestCancelacionEnLaAplicacion(SACKTestCase):
         atendiendo = Hilo(server_app.handle_connection, conexion, self.dir, threading.Event())
         atendiendo.start()
 
-        cliente.sock.policy = netsim.drop_seq(1 + 99 * MAX, 10 ** 6)   # no termina sola
-        datos = b"UPLOAD subido.bin\n" + os.urandom(MAX * 100)
+        datos = os.urandom(MAX * 100)
+        header = f"UPLOAD {len(datos)} subido.bin".encode()
+        cliente.send(header)
+        respuesta = Hilo(cliente.recv)
+        respuesta.start()
+        self.assertEqual(respuesta.resultado_o_error(5.0), b"OK")
+
+        # el seq arranca en 1 y el pedido ya lo corrio: no termina sola
+        cliente.sock.policy = netsim.drop_seq(1 + len(header) + 99 * MAX, 10 ** 6)
         enviando = Hilo(cliente.send, datos)
         enviando.start()
         time.sleep(0.1)

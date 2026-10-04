@@ -4,10 +4,16 @@ import socket
 
 from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_storage_dir, load_config
-from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
+from lib.file_transfer.file_transfer import (InvalidMessage, is_upload_request, parse_upload_request,
+                                             receive_content, send_error, send_file, send_ok,
+                                             write_file)
 from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.listener import Listener
+
+# Tamanio maximo de archivo que el servidor acepta en un upload (2 GB).
+MAX_FILE_SIZE = 2 * 1024 ** 3
+
 
 class Dispatcher:
     def __init__(self):
@@ -89,15 +95,27 @@ def send_requested_file(connection, content, storage_dir):
     logger.error(f"[Servidor] El archivo '{requested_filepath}' no existe.")
     send_error(connection, f"El archivo '{requested_filepath}' no existe.")
 
-def save_uploaded_file(content, storage_dir):
-    first_newline = content.find(b"\n")
-    if first_newline == -1:
-        logger.error("[Servidor] Formato de UPLOAD inválido.")
+def receive_uploaded_file(connection, content, storage_dir, stopping):
+    try:
+        request = parse_upload_request(content)
+    except InvalidMessage as error:
+        logger.error(f"[Servidor] {error}")
+        send_error(connection, str(error))
         return
-    header = content[:first_newline]
-    file_bytes = content[first_newline + 1:]
-    filename = header[len(b"UPLOAD "):].decode("utf-8")
-    filename = os.path.basename(filename)
+    if request.size > MAX_FILE_SIZE:
+        logger.error(f"[Servidor] Rechazo '{request.filename}': {request.size} bytes supera el límite de {MAX_FILE_SIZE}.")
+        send_error(connection, f"El archivo ({request.size} bytes) supera el límite de {MAX_FILE_SIZE} bytes.")
+        return
+    send_ok(connection)
+
+    file_bytes = receive_content(connection)
+    if stopping.is_set():
+        logger.info("[Servidor] Transferencia cancelada, no se guarda el archivo.")
+        return
+    if len(file_bytes) != request.size:
+        logger.error(f"[Servidor] '{request.filename}': se declararon {request.size} bytes y llegaron {len(file_bytes)}; no se guarda.")
+        return
+    filename = os.path.basename(request.filename)
     target_filepath = os.path.join(storage_dir, filename)
     logger.info(f"[Servidor] Guardando en '{target_filepath}'...")
     write_file(target_filepath, file_bytes)
@@ -111,8 +129,8 @@ def handle_connection(connection, storage_dir, stopping):
             return
         if is_download_request(received_content):
             send_requested_file(connection, received_content, storage_dir)
-        elif received_content.startswith(b"UPLOAD "):
-            save_uploaded_file(received_content, storage_dir)
+        elif is_upload_request(received_content):
+            receive_uploaded_file(connection, received_content, storage_dir, stopping)
         else:
             logger.error("[Servidor] Petición no reconocida.")
     finally: 
