@@ -18,7 +18,7 @@ from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.listener import Listener
 
 # Tamanio maximo de archivo que el servidor acepta en un upload (2 GB).
-MAX_FILE_SIZE = 2 * 1024**3
+MAX_FILE_SIZE = 1 * 1024**3
 
 
 class Dispatcher:
