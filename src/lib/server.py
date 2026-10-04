@@ -17,7 +17,7 @@ from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.listener import Listener
 
-# Tamanio maximo de archivo que el servidor acepta en un upload (2 GB).
+# Tamanio maximo de archivo que el servidor acepta en un upload.
 MAX_FILE_SIZE = 1 * 1024**3
 
 

@@ -59,7 +59,7 @@ class TestTodoBien(SACKTestCase):
                 self.assertPaquete(datos[0], FIN=1, payload=b"")
 
     def test_archivo_grande(self):
-        datos = os.urandom(1 * 1024 * 1024 + 3)
+        datos = os.urandom(2 * 1024 * 1024 + 3)
         cliente, conexion = self.conectados()
         self.assertEqual(
             self.transferir(cliente, conexion, datos, timeout=60),

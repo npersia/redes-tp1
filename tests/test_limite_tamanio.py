@@ -19,8 +19,8 @@ server.py trabajan con UploadRequest y con las excepciones UploadRejected /
 InvalidMessage.
 
 Los tests que necesitan un archivo "demasiado grande" bajan MAX_FILE_SIZE con
-mock.patch en vez de armar 2 GB; los que prueban el valor real de la constante
-juegan del lado del cliente a mano y solo declaran el tamanio.
+mock.patch en vez de armar MAX_FILE_SIZE bytes; los que prueban el valor real
+de la constante juegan del lado del cliente a mano y solo declaran el tamanio.
 """
 
 import logging
@@ -145,7 +145,7 @@ class TestMensajeDeUpload(unittest.TestCase):
 
 class TestConstante(unittest.TestCase):
 
-    def test_el_limite_del_servidor_es_2_gb(self):
+    def test_el_limite_del_servidor_es_max_file_size(self):
         self.assertEqual(server_app.MAX_FILE_SIZE, UN_GB)
 
 
@@ -362,7 +362,9 @@ class _LimiteBase:
 
         self.assertEqual(self._guardado("a.txt"), b"hola!")
 
-    def test_el_servidor_rechaza_mas_de_2_gb_con_la_constante_real(self):
+    def test_el_servidor_rechaza_mas_de_max_file_size_con_la_constante_real(
+            self
+    ):
         cliente, servidor = self._atendido_a_mano()
 
         cliente.send(f"UPLOAD {UN_GB + 1} enorme.bin".encode())
@@ -372,10 +374,10 @@ class _LimiteBase:
         self.assertTrue(respuesta.startswith(b"ERROR "), respuesta)
         self.assertEqual(os.listdir(self.storage), [])
 
-    def test_el_servidor_acepta_exactamente_2_gb(self):
+    def test_el_servidor_acepta_exactamente_max_file_size(self):
         cliente, _ = self._atendido_a_mano()
         cliente.send(f"UPLOAD {UN_GB} justo.bin".encode())
-        # no mandamos 2 GB: alcanza con ver que lo acepta
+        # no mandamos MAX_FILE_SIZE bytes: alcanza con ver que lo acepta
         self.assertEqual(self._recv(cliente), b"OK")
 
     def test_el_servidor_no_guarda_si_llegan_menos_bytes_que_los_declarados(

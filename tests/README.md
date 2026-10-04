@@ -57,7 +57,7 @@ test que falla.
 | `test_sack_timeout_perdida.py` | Timeout + perdida: doble timeout, fast retransmit perdido, agotamiento. |
 | `test_sack_errores.py` | ERR remoto, trafico ajeno, datagramas invalidos, limite de silencio de `recv()` (armado con el primer dato), bordes y cierre. |
 | `test_cambio_de_sentido.py` | Cambio de sentido en una conexion (pedido -> respuesta -> archivo) perdiendo el ACK justo antes del cambio, en SW y SACK. |
-| `test_limite_tamanio.py` | Limite de 2 GB del upload: mensajes `UPLOAD <tamanio> <nombre>` / `OK` / `ERROR`, bordes del limite, rechazo de punta a punta. |
+| `test_limite_tamanio.py` | Limite de `MAX_FILE_SIZE` del upload: mensajes `UPLOAD <tamanio> <nombre>` / `OK` / `ERROR`, bordes del limite, rechazo de punta a punta. |
 | `test_sack_cancel.py` | Cancelacion en SACK: `cancel()`, ERR+CANCEL, `shutdown()` entre extremos, `close()` concurrente, upload cancelado. |
 
 Los tests de SACK heredan de `SACKTestCase` (en `base.py`), que agrega el
