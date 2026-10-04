@@ -106,7 +106,15 @@ class StopAndWait(BaseTransport):
                         raise ConnectionClosed("El remoto notificó un error con flag ERR.")
 
                     if not packet.get_flag_ACK(flags_byte):
-                        trace.no_ack(flags_byte)
+                        # Un dato que ya entrego recv(): el otro no vio el ACK
+                        # y sigue reintentando. Si no se lo reconfirmo, los dos
+                        # quedan en send() ignorandose (livelock).
+                        seq = packet.get_header_sequence_paquet(resp)
+                        if seq < self.exp_sequence_number:
+                            trace.old_data(seq, self.exp_sequence_number)
+                            self.send_ack()
+                        else:
+                            trace.no_ack(flags_byte)
                         continue
 
                     ack_num = packet.get_header_ack(resp)

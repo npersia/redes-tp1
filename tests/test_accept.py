@@ -287,12 +287,10 @@ class TestAccept(SWTestCase):
         servidor = self.servidor()
         self.assertAlmostEqual(servidor.sock.gettimeout(), self.timeout, places=4)
 
-    def test_accept_propaga_el_timeout_para_que_el_llamador_decida(self):
-        """Es el contrato que ya asumia Dispatcher.start() en server.py."""
-        import socket as _s
+    def test_accept_devuelve_none_si_vence_el_timeout(self):
+        """El llamador decide si sigue esperando (Dispatcher.start() en server.py)."""
         servidor = self.servidor()
-        with self.assertRaises(_s.timeout):
-            servidor.accept()
+        self.assertIsNone(servidor.accept())
         self.assertFalse(servidor.is_closed, "el timeout no cierra el servidor")
 
     def test_shutdown_corta_el_accept(self):

@@ -42,6 +42,10 @@ class SendTrace(Trace):
     def no_ack(self, flags_byte):
         self.log(f"respuesta sin ACK (flags={flag_names(flags_byte)}) en el paquete {self.position}")
 
+    def old_data(self, seq, exp_seq):
+        self.log(f"llego un dato viejo (seq={seq}, esperado={exp_seq}): el otro no vio mi ACK, "
+                 f"se lo reenvio")
+
     def retransmit(self, expected_ack, intento, tope):
         self.retransmissions += 1
         self.log(f"timeout esperando el ACK {expected_ack} del paquete {self.position}; "

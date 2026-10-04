@@ -1,7 +1,6 @@
 """Base comun de los tests de Stop & Wait."""
 
 import os
-import socket
 import sys
 import threading
 import time
@@ -117,16 +116,15 @@ class SWTestCase(unittest.TestCase):
         return s
 
     def aceptar(self, servidor, timeout=5.0):
-        """accept() reintentando: ahora propaga socket.timeout al llamador.
+        """accept() reintentando: devuelve None si vence su timeout sin conexion.
 
         Es el mismo patron que usa Dispatcher.start() en src/lib/server.py.
         """
         limite = time.monotonic() + timeout
         while time.monotonic() < limite:
-            try:
-                return servidor.accept()
-            except socket.timeout:
-                continue
+            conexion = servidor.accept()
+            if conexion is not None:
+                return conexion
         raise AssertionError("no llego ninguna conexion en el plazo esperado")
 
     def cliente(self, port):

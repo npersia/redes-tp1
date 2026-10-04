@@ -178,10 +178,9 @@ class TestDispatcher(SWTestCase):
     def test_el_shutdown_event_detiene_el_dispatcher(self):
         """Apretar Enter tiene que frenar el servidor.
 
-        Dispatcher.start() sale del while cuando accept() lanza socket.timeout
-        y el shutdown_event esta puesto. Antes el socket de escucha era
-        bloqueante y accept() se comia los timeouts, asi que el
-        `except socket.timeout: continue` del Dispatcher era codigo muerto y
+        Dispatcher.start() vuelve a mirar el shutdown_event cada vez que
+        accept() devuelve None por timeout. Antes el socket de escucha era
+        bloqueante y accept() no volvia nunca, asi que
         `server_thread.join()` de main() no retornaba nunca.
         """
         transporte = self.servidor()

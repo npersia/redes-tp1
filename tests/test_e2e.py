@@ -240,49 +240,33 @@ class TestHallazgosDeProtocolo(SWTestCase):
         self.assertIn("Connexion lost", str(cm.exception))
         self.assertGreaterEqual(transcurrido, self.timeout * self.retries * 0.8)
 
-    def test_download_entra_en_livelock_si_se_pierde_el_ack_del_pedido(self):
-        """HALLAZGO (sin arreglar): livelock a maxima velocidad, sin timeout.
+    def test_download_termina_aunque_se_pierda_el_ack_del_pedido(self):
+        """Antes era un HALLAZGO: livelock a maxima velocidad, sin timeout.
 
         Secuencia: el cliente manda 'DOWNLOAD x', el servidor lo recibe y su
         ACK se pierde. El servidor pasa a send() con el archivo; el cliente
-        sigue en send() reintentando el pedido.
-          - el servidor recibe el pedido duplicado: no tiene flag ACK, no
-            matchea, reenvia el dato sin consumir reintentos;
-          - el cliente recibe el dato: no tiene flag ACK, no matchea,
-            reenvia el pedido sin consumir reintentos.
-        Ninguno de los dos hace timeout nunca, asi que ninguno abandona:
-        se quedan quemando CPU e inundando la red indefinidamente.
+        sigue en send() reintentando el pedido. Antes cada uno ignoraba los
+        datos del otro sin consumir reintentos. Ahora el servidor, que ya
+        entrego el pedido, lo reconfirma: el cliente termina su send() y pasa
+        a recv(). Mas casos en test_cambio_de_sentido.py.
         """
         cliente, conexion = self.conectados()
         conexion.sock.policy = drop_acks_nth(1)      # se pierde el ACK del pedido
+        archivo = b"contenido del archivo" * 20
 
         def servidor():
             pedido = conexion.recv()
-            conexion.send(b"contenido del archivo" * 20)
+            conexion.send(archivo)
             return pedido
 
         hilo_srv = Hilo(servidor)
         hilo_srv.start()
-        hilo_cli = Hilo(cliente.send, b"DOWNLOAD archivo.txt")
-        hilo_cli.start()
+        cliente.send(b"DOWNLOAD archivo.txt")
 
-        time.sleep(self.timeout * self.retries * 4)
-
-        cli_tx, srv_tx = cliente.sock.tx, conexion.sock.tx
-        self.assertTrue(hilo_cli.is_alive(), "el send() del cliente nunca termina")
-        self.assertTrue(hilo_srv.is_alive(), "el send() del servidor nunca termina")
-        self.assertGreater(
-            cli_tx, self.retries * 5,
-            f"el cliente retransmitio {cli_tx} veces sin agotar RETRIES={self.retries}",
-        )
-        self.assertGreater(srv_tx, self.retries * 5)
-
-        time.sleep(0.05)
-        self.assertGreater(cliente.sock.tx, cli_tx, "sigue creciendo: no converge")
-        self.assertGreater(conexion.sock.tx, srv_tx)
-
-        cliente.shutdown()
-        conexion.shutdown()
+        self.assertEqual(cliente.recv(), archivo)
+        self.assertEqual(hilo_srv.resultado_o_error(5.0), b"DOWNLOAD archivo.txt")
+        self.assertLess(cliente.sock.tx, self.retries * 5, "sin inundar la red")
+        self.assertLess(conexion.sock.tx, self.retries * 5)
 
     def test_un_syn_tardio_no_confunde_a_una_conexion_ya_establecida(self):
         """El socket efimero ignora los SYN: solo el de escucha los ve."""
