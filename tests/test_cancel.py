@@ -8,7 +8,9 @@ como tal en lugar de hablar de un error.
 import time
 import unittest
 
-from base import ConnectionClosed, Hilo, SWTestCase, TransferCancelled, packet, bt, sw
+from base import (
+    ConnectionClosed, Hilo, SWTestCase, TransferCancelled, packet, bt, sw
+)
 
 
 MAX = sw.MAX_PAYLOAD_SIZE
@@ -39,25 +41,33 @@ class TestAvisoDeCancelacion(ConPeer):
         t.notify_abort()
 
         vistos = peer.drain()
-        self.assertEqual(len(vistos), bt.ABORT_NOTICES,
-                         f"esperaba {bt.ABORT_NOTICES} avisos{self.volcado()}")
+        self.assertEqual(
+            len(vistos),
+            bt.ABORT_NOTICES,
+            f"esperaba {bt.ABORT_NOTICES} avisos{self.volcado()}",
+        )
         for aviso in vistos:
-            self.assertPaquete(aviso, ERR=1, CANCEL=1, SYN=0, FIN=0,
-                               seq=1000, ack=2000, payload=b"")
+            self.assertPaquete(
+                aviso, ERR=1, CANCEL=1, SYN=0, FIN=0, seq=1000, ack=2000,
+                payload=b""
+            )
 
     def test_cancelar_durante_send_avisa_con_cancel(self):
         t, peer = self.transporte(seq=1000)
         hilo = Hilo(t.send, b"z" * MAX * 2)
         hilo.start()
 
-        peer.recv(timeout=2.0)          # primer chunk, no lo ACKeo
+        peer.recv(timeout=2.0)  # primer chunk, no lo ACKeo
         t.cancel()
 
         with self.assertRaises(TransferCancelled):
             hilo.resultado_o_error()
 
         avisos = [p for p in peer.drain() if p["ERR"]]
-        self.assertTrue(avisos, f"no salio ningun aviso de aborto{self.volcado()}")
+        self.assertTrue(
+            avisos,
+            f"no salio ningun aviso de aborto{self.volcado()}"
+        )
         for aviso in avisos:
             self.assertPaquete(aviso, ERR=1, CANCEL=1)
 
@@ -69,7 +79,10 @@ class TestAvisoDeCancelacion(ConPeer):
             t.recv()
 
         avisos = [p for p in peer.drain() if p["ERR"]]
-        self.assertTrue(avisos, f"no salio ningun aviso de aborto{self.volcado()}")
+        self.assertTrue(
+            avisos,
+            f"no salio ningun aviso de aborto{self.volcado()}"
+        )
         for aviso in avisos:
             self.assertPaquete(aviso, ERR=1, CANCEL=1)
 
@@ -82,9 +95,11 @@ class TestRecepcionDeCancelacion(ConPeer):
         hilo = Hilo(t.recv)
         hilo.start()
 
-        peer.send_pkt(t.sock.getsockname(),
-                      flags=packet.ERR_MASK | packet.CANCEL_MASK,
-                      sequence_number=1000)
+        peer.send_pkt(
+            t.sock.getsockname(),
+            flags=packet.ERR_MASK | packet.CANCEL_MASK,
+            sequence_number=1000,
+        )
 
         with self.assertRaises(TransferCancelled) as cm:
             hilo.resultado_o_error()
@@ -95,8 +110,11 @@ class TestRecepcionDeCancelacion(ConPeer):
         hilo = Hilo(t.recv)
         hilo.start()
 
-        peer.send_pkt(t.sock.getsockname(), flags=packet.ERR_MASK,
-                      sequence_number=1000)
+        peer.send_pkt(
+            t.sock.getsockname(),
+            flags=packet.ERR_MASK,
+            sequence_number=1000
+        )
 
         with self.assertRaises(ConnectionClosed) as cm:
             hilo.resultado_o_error()
@@ -108,8 +126,10 @@ class TestRecepcionDeCancelacion(ConPeer):
         hilo.start()
 
         _, addr = peer.recv(timeout=2.0)
-        peer.send_pkt(addr, flags=packet.ERR_MASK | packet.CANCEL_MASK,
-                      sequence_number=0, ack=0)
+        peer.send_pkt(
+            addr, flags=packet.ERR_MASK | packet.CANCEL_MASK,
+            sequence_number=0, ack=0
+        )
 
         with self.assertRaises(TransferCancelled) as cm:
             hilo.resultado_o_error()
@@ -183,12 +203,14 @@ class TestCierreForzadoEntreExtremos(SWTestCase):
     retries = 100
 
     def test_el_receptor_cierra_y_el_que_manda_se_entera(self):
-        """Es el Enter en el servidor: Dispatcher._stop() -> connection.shutdown()."""
+        """Es el Enter en el servidor: Dispatcher._stop() ->
+        connection.shutdown().
+        """
         cliente, conexion = self.conectados()
 
         enviando = Hilo(cliente.send, b"z" * MAX * 3)
         enviando.start()
-        time.sleep(self.timeout * 2)   # que el send() ya este esperando el ACK
+        time.sleep(self.timeout * 2)  # que el send() ya este esperando el ACK
 
         conexion.shutdown()
 

@@ -31,15 +31,19 @@ class Listener:
         self.trace = ListenTrace(self.TAG)
 
     def start_server(self) -> None:
-        """Abre el socket de escucha y lo deja listo para aceptar conexiones."""
+        """Abre el socket de escucha y lo deja listo para aceptar
+        conexiones."""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
-        self.sock.settimeout(self.timeout) #sin esto accept() bloquea para siempre y el servidor no se puede apagar
+        # sin esto accept() bloquea para siempre y el servidor no se puede
+        # apagar
+        self.sock.settimeout(self.timeout)
         self.is_closed = False
         self.started = True
 
     def accept(self) -> base_transport.BaseTransport:
-        """Espera el SYN de un cliente y devuelve la conexion ya establecida."""
+        """Espera el SYN de un cliente y devuelve la conexion ya
+        establecida."""
         if not self.started:
             raise RuntimeError("No server initialized.")
 
@@ -63,25 +67,29 @@ class Listener:
                         self.trace.unsupported(client_address, protocol_id)
                         continue
                     self.trace.syn(client_address, client_isn, peer_class.TAG)
-                    peer = self._accept_syn(client_address, client_isn, peer_class)
+                    peer = self._accept_syn(
+                        client_address, client_isn, peer_class
+                    )
                     if peer is not None:
                         return peer
             except socket.timeout:
-                return None #todavía no llego nada
+                return None  # todavía no llego nada
             except Exception as e:
                 if self.is_closed:
                     self.trace.closed()
                     raise ConnectionClosed(
-                        "server closed while accepting a connection.")
+                        "server closed while accepting a connection."
+                    )
                 raise e
         raise ConnectionClosed("Server closed.")
 
     @staticmethod
     def _transport_for(protocol_id):
-        """La clase que atiende la conexion, segun el protocolo que pide el SYN.
+        """La clase que atiende la conexion, segun el protocolo que pide
+        el SYN.
 
-        Solo sirven las clases que usan este handshake, que son las que declaran
-        ese PROTOCOL_ID en el header (TCP no lo declara).
+        Solo sirven las clases que usan este handshake, que son las que
+        declaran ese PROTOCOL_ID en el header (TCP no lo declara).
         """
         peer_class = TransportFactory.get_class_by_id(protocol_id)
         if peer_class is None or peer_class.PROTOCOL_ID != protocol_id:
@@ -94,32 +102,40 @@ class Listener:
         Va aparte de accept() para no tener que releer el SYN. Devuelve None si
         el cliente no completo el handshake, y accept() sigue esperando.
         """
-        #aca creo un socket efimero para la comunicacion
+        # aca creo un socket efimero para la comunicacion
         client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        client_sock.bind((self.host, 0))  # el 0 hace que el SO asigne un puerto libre
-        #algun timeout hay que poner para que no se quede esperando por siempre,
-        #tambien para poder mandar de nuevo
+        # el 0 hace que el SO asigne un puerto libre
+        client_sock.bind((self.host, 0))
+        # algun timeout hay que poner para que no se quede esperando
+        # por siempre, tambien para poder mandar de nuevo
         client_sock.settimeout(self.timeout)
 
-        server_isn = 0  # TODO podria o deberia ser random, pero lo dejo en 0 para que sea mas facil
+        # TODO podria o deberia ser random, pero lo dejo en 0 para que sea
+        # mas facil
+        server_isn = 0
 
-        #respondo con SYN=1, ACK=1, seq = server_isn, ack = client_isn+1
+        # respondo con SYN=1, ACK=1, seq = server_isn, ack = client_isn+1
         syn_packet = packet.make_packet(
             version=VERSION,
             protocol=peer_class.PROTOCOL_ID,
             flags=packet.SYN_MASK | packet.ACK_MASK,
             sequence_number=server_isn,
-            ack=client_isn + 1
+            ack=client_isn + 1,
         )
 
-        trace = AcceptTrace(self.TAG, client_address, client_sock.getsockname(),
-                            server_isn, self.max_retries)
+        trace = AcceptTrace(
+            self.TAG,
+            client_address,
+            client_sock.getsockname(),
+            server_isn,
+            self.max_retries,
+        )
 
         retries = 0
         while retries < self.max_retries:
             client_sock.sendto(syn_packet, client_address)
             try:
-                #espero ACK del cliente y SYN=0
+                # espero ACK del cliente y SYN=0
                 resp, addr = client_sock.recvfrom(RECV_BUFFER)
                 if addr != client_address or not packet.is_valid(resp):
                     trace.stray(addr)
@@ -129,10 +145,16 @@ class Listener:
 
                 if not packet.get_flag_SYN(resp_flags):
                     if packet.get_header_ack(resp) == server_isn + 1:
-                        peer = peer_class(client_address[0], client_address[1],
-                                          sock=client_sock, remote_address=client_address)
+                        peer = peer_class(
+                            client_address[0],
+                            client_address[1],
+                            sock=client_sock,
+                            remote_address=client_address,
+                        )
                         peer._init_peer(server_isn + 1, client_isn + 1)
-                        trace.established(peer.sequence_number, peer.exp_sequence_number)
+                        trace.established(
+                            peer.sequence_number, peer.exp_sequence_number
+                        )
                         return peer
                     trace.bad_ack(packet.get_header_ack(resp), server_isn + 1)
             except socket.timeout:
@@ -155,8 +177,13 @@ class Listener:
         if sock is None:
             return
 
-        logger.debug(f"[{self.TAG}] close(): dejo de escuchar en {self.host}:{self.port}")
+        logger.debug(
+            f"[{self.TAG}] close(): dejo de escuchar en "
+            f"{self.host}:{self.port}"
+        )
         try:
             sock.close()
         except Exception as error:
-            logger.debug(f"[{self.TAG}] close(): el socket ya venia mal ({error})")
+            logger.debug(
+                f"[{self.TAG}] close(): el socket ya venia mal ({error})"
+            )

@@ -20,7 +20,7 @@ from base import SACK_TIMEOUT_EXACTO, SACKTestCase, netsim, sack
 
 MAX = sack.MAX_PAYLOAD_SIZE
 CWND = sack.CWND
-MARGEN = 1.0       # holgura del scheduler para el limite superior (ver docstring)
+MARGEN = 1.0  # holgura del scheduler para el limite superior (ver docstring)
 
 
 def seq_del(n):
@@ -40,23 +40,39 @@ class Timeout(SACKTestCase):
     def transferir_con(self, tam, emisor=None, receptor=None):
         resultados = []
         datos = os.urandom(tam)
-        for direccion, e, r, rol_e, rol_r in self.direcciones(emisor, receptor):
+        for direccion, e, r, rol_e, rol_r in self.direcciones(
+            emisor,
+            receptor
+        ):
             with self.subTest(direccion=direccion):
                 self.net.entries.clear()
-                self.assertEqual(self.transferir(e, r, datos), datos, self.volcado())
+                self.assertEqual(
+                    self.transferir(e, r, datos),
+                    datos,
+                    self.volcado()
+                )
                 tiempos = self.tiempos_por_seq(rol_e)
-                self._volcados[id(tiempos)] = f"\n[{direccion}]{self.volcado()}"
+                self._volcados[id(tiempos)] = (
+                    f"\n[{direccion}]{self.volcado()}"
+                )
                 resultados.append((tiempos, e._send_trace))
         return resultados
 
     def assertEsperoElTimeout(self, tiempos, seq, copia=1):
-        """La copia `copia` (1 = primer reenvio) salio un timeout despues de la anterior."""
+        """La copia `copia` (1 = primer reenvio) salio un timeout
+        despues de la anterior."""
         espera = tiempos[seq][copia] - tiempos[seq][copia - 1]
         volcado = self._volcados.get(id(tiempos)) or self.volcado()
-        self.assertGreaterEqual(espera, self.timeout * 0.95,
-                                f"reenvio antes del timeout ({espera * 1000:.1f}ms){volcado}")
-        self.assertLessEqual(espera, self.timeout + sack.POLL_INTERVAL + MARGEN,
-                             f"reenvio demasiado tarde ({espera * 1000:.1f}ms){volcado}")
+        self.assertGreaterEqual(
+            espera,
+            self.timeout * 0.95,
+            f"reenvio antes del timeout ({espera * 1000:.1f}ms){volcado}",
+        )
+        self.assertLessEqual(
+            espera,
+            self.timeout + sack.POLL_INTERVAL + MARGEN,
+            f"reenvio demasiado tarde ({espera * 1000:.1f}ms){volcado}",
+        )
 
 
 class TestTimeoutPorPerdida(Timeout):
@@ -64,22 +80,32 @@ class TestTimeoutPorPerdida(Timeout):
     def test_el_ultimo_se_pierde_y_vuelve_por_timeout(self):
         """Nada detras del ultimo: sin duplicados, solo el timer lo rescata."""
         ultimo = seq_del(2)
-        for tiempos, trace in self.transferir_con(MAX * 3, emisor=lambda: netsim.drop_seq(ultimo)):
+        for tiempos, trace in self.transferir_con(
+            MAX * 3, emisor=lambda: netsim.drop_seq(ultimo)
+        ):
             self.assertEqual(len(tiempos[ultimo]), 2)
             self.assertEsperoElTimeout(tiempos, ultimo)
             self.assertEqual((trace.timeouts, trace.fast_retransmits), (1, 0))
 
     def test_un_hueco_con_pocos_detras_espera_el_timeout(self):
-        """Solo 2 segmentos detras del hueco: 2 duplicados no alcanzan el umbral."""
-        for tiempos, trace in self.transferir_con(MAX * 3, emisor=lambda: netsim.drop_seq(seq_del(0))):
+        """Solo 2 segmentos detras del hueco: 2 duplicados no alcanzan
+        el umbral."""
+        for tiempos, trace in self.transferir_con(
+            MAX * 3, emisor=lambda: netsim.drop_seq(seq_del(0))
+        ):
             self.assertEsperoElTimeout(tiempos, seq_del(0))
-            self.assertEqual({s: len(t) for s, t in tiempos.items() if len(t) > 1}, {seq_del(0): 2},
-                             "solo el hueco: los sackeados no se reenvian")
+            self.assertEqual(
+                {s: len(t) for s, t in tiempos.items() if len(t) > 1},
+                {seq_del(0): 2},
+                "solo el hueco: los sackeados no se reenvian",
+            )
             self.assertEqual(trace.timeouts, 1)
 
     def test_se_pierde_la_ventana_entera(self):
         perdidos = [seq_del(i) for i in range(CWND)]
-        for tiempos, trace in self.transferir_con(MAX * CWND, emisor=lambda: netsim.drop_seqs(*perdidos)):
+        for tiempos, trace in self.transferir_con(
+            MAX * CWND, emisor=lambda: netsim.drop_seqs(*perdidos)
+        ):
             for s in perdidos:
                 self.assertEqual(len(tiempos[s]), 2)
             self.assertEsperoElTimeout(tiempos, perdidos[0])
@@ -89,7 +115,9 @@ class TestTimeoutPorPerdida(Timeout):
         """Al vencer, on_timeout borra las marcas SACK, pero el ACK siguiente
         las vuelve a poner: no se reenvian los segmentos que si llegaron."""
         perdidos = {seq_del(0), seq_del(2)}
-        for tiempos, trace in self.transferir_con(MAX * 4, emisor=lambda: netsim.drop_seqs(*perdidos)):
+        for tiempos, trace in self.transferir_con(
+            MAX * 4, emisor=lambda: netsim.drop_seqs(*perdidos)
+        ):
             reenviados = {s for s, t in tiempos.items() if len(t) > 1}
             self.assertEqual(reenviados, perdidos)
             self.assertEqual(trace.timeouts, 2)
@@ -101,10 +129,18 @@ class TestTimeoutSinPerdida(Timeout):
         """Nada se pierde, pero los ACKs tardan 2 timeouts: el emisor reenvia
         igual (no hay RTT adaptativo). Los datos llegan bien; el receptor
         descarta los duplicados."""
+
         def acks_lentos():
-            return lambda ctx: (("delay", self.timeout * 2)
-                                if netsim.es_ack_puro_sack_pkt(ctx.pkt) else netsim.PASS)
-        for tiempos, trace in self.transferir_con(MAX * 3, receptor=acks_lentos):
+            return lambda ctx: (
+                ("delay", self.timeout * 2)
+                if netsim.es_ack_puro_sack_pkt(ctx.pkt)
+                else netsim.PASS
+            )
+
+        for tiempos, trace in self.transferir_con(
+            MAX * 3,
+            receptor=acks_lentos
+        ):
             self.assertGreater(trace.timeouts, 0)
             self.assertEqual(trace.fast_retransmits, 0)
 

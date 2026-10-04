@@ -26,6 +26,7 @@ import lib.protocols.packet.packet as packet
 # Inspeccion de paquetes
 # ---------------------------------------------------------------------------
 
+
 def parse(data: bytes) -> dict:
     """Vuelca un datagrama RDT a un dict comodo para los asserts."""
     flags = bytes([packet.get_header_flags(data)])
@@ -46,10 +47,18 @@ def parse(data: bytes) -> dict:
 
 
 def describe(p: dict) -> str:
-    banderas = "+".join(
-        nombre for nombre in ("SYN", "FIN", "ERR", "ACK", "CANCEL") if p[nombre]
-    ) or "-"
-    return f"[{banderas} seq={p['seq']} ack={p['ack']} len={len(p['payload'])}]"
+    banderas = (
+        "+".join(
+            nombre
+            for nombre in ("SYN", "FIN", "ERR", "ACK", "CANCEL")
+            if p[nombre]
+        )
+        or "-"
+    )
+    return (
+        f"[{banderas} seq={p['seq']} ack={p['ack']} "
+        f"len={len(p['payload'])}]"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +77,7 @@ class Ctx:
         self.sock = sock
         self.data = data
         self.addr = addr
-        self.n = n              # numero de datagrama de ESTE socket, 1-based
+        self.n = n  # numero de datagrama de ESTE socket, 1-based
         self.pkt = parse(data)
 
 
@@ -128,16 +137,17 @@ def first_n_then(n, primera, segunda):
 # Socket instrumentado
 # ---------------------------------------------------------------------------
 
+
 class ControlledSocket:
     """Socket UDP real con un gancho de salida y registro de trafico."""
 
     def __init__(self, net, *args, **kwargs):
         self._net = net
         self._sock = _real_socket.socket(*args, **kwargs)
-        self.policy = None          # los tests la asignan cuando quieren
-        self.role = None            # etiqueta libre para leer los logs
-        self.tx = 0                 # datagramas ofrecidos a sendto
-        self.tx_wire = 0            # datagramas que realmente salieron
+        self.policy = None  # los tests la asignan cuando quieren
+        self.role = None  # etiqueta libre para leer los logs
+        self.tx = 0  # datagramas ofrecidos a sendto
+        self.tx_wire = 0  # datagramas que realmente salieron
         self.rx = 0
         self.dropped = 0
         self.closed = False
@@ -244,7 +254,7 @@ class _SocketModuleProxy:
 class Net:
     def __init__(self):
         self.sockets = []
-        self.entries = []           # (t, role, evento, addr, pkt)
+        self.entries = []  # (t, role, evento, addr, pkt)
         self.default_policy = None
         self.on_create = None
         self._lock = threading.Lock()
@@ -258,7 +268,13 @@ class Net:
     def _log(self, sock, evento, addr, pkt):
         with self._lock:
             self.entries.append(
-                (time.monotonic() - self._t0, sock.role or "?", evento, addr, pkt)
+                (
+                    time.monotonic() - self._t0,
+                    sock.role or "?",
+                    evento,
+                    addr,
+                    pkt,
+                )
             )
 
     @contextlib.contextmanager
@@ -278,10 +294,13 @@ class Net:
 
     # -- consultas ---------------------------------------------------------
     def sent(self, role=None, incluir_drops=True):
-        eventos = {"tx", "tx-dup"} | ({"drop", "delay"} if incluir_drops else set())
+        eventos = {"tx", "tx-dup"} | (
+            {"drop", "delay"} if incluir_drops else set()
+        )
         with self._lock:
             return [
-                e[4] for e in self.entries
+                e[4]
+                for e in self.entries
                 if e[2] in eventos and (role is None or e[1] == role)
             ]
 
@@ -292,7 +311,9 @@ class Net:
         lineas = []
         for t, role, evento, addr, pkt in self.entries:
             desc = describe(pkt) if pkt else "<malformado>"
-            lineas.append(f"{t*1000:8.1f}ms {role:>10} {evento:<8} {addr} {desc}")
+            lineas.append(
+                f"{t*1000:8.1f}ms {role:>10} {evento:<8} {addr} {desc}"
+            )
         return "\n".join(lineas)
 
 
@@ -300,11 +321,14 @@ class Net:
 # Peer crudo: para inyectar paquetes a mano (paquetes invalidos, spoofing, ...)
 # ---------------------------------------------------------------------------
 
+
 class RawPeer:
     """Socket UDP pelado para inyectar datagramas arbitrarios."""
 
     def __init__(self, host="127.0.0.1"):
-        self.sock = _real_socket.socket(_real_socket.AF_INET, _real_socket.SOCK_DGRAM)
+        self.sock = _real_socket.socket(
+            _real_socket.AF_INET, _real_socket.SOCK_DGRAM
+        )
         self.sock.bind((host, 0))
         self.sock.settimeout(2.0)
 
@@ -353,21 +377,41 @@ class RawPeer:
 # payload: "ACK sin payload" no alcanza para separar datos de ACKs puros.
 # ---------------------------------------------------------------------------
 
+
 def es_dato_sack_pkt(p):
-    """Segmento de datos de SACK: trae payload o FIN (y no es del handshake)."""
-    return not p["SYN"] and not p["ERR"] and (bool(p["payload"]) or bool(p["FIN"]))
+    """Segmento de datos de SACK: trae payload o FIN.
+
+    (no es del handshake)
+    """
+    return (
+        not p["SYN"]
+        and not p["ERR"]
+        and (bool(p["payload"]) or bool(p["FIN"]))
+    )
 
 
 def es_ack_puro_sack_pkt(p):
-    return p["ACK"] and not p["SYN"] and not p["ERR"] and not es_dato_sack_pkt(p)
+    return (
+        p["ACK"]
+        and not p["SYN"]
+        and not p["ERR"]
+        and not es_dato_sack_pkt(p)
+    )
 
 
 def drop_seq(seq, veces=1):
-    """Tira las primeras `veces` copias del segmento de datos `seq` (incluye retransmisiones)."""
+    """Tira las primeras `veces` copias del segmento de datos `seq`.
+
+    Incluye retransmisiones.
+    """
     restantes = {"n": veces}
 
     def politica(ctx):
-        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] == seq and restantes["n"] > 0:
+        if (
+            es_dato_sack_pkt(ctx.pkt)
+            and ctx.pkt["seq"] == seq
+            and restantes["n"] > 0
+        ):
             restantes["n"] -= 1
             return DROP
         return PASS
@@ -376,7 +420,10 @@ def drop_seq(seq, veces=1):
 
 
 def drop_seqs(*seqs):
-    """Tira la primera copia de cada segmento de datos cuyo seq este en `seqs`."""
+    """Tira la primera copia de cada segmento de datos.
+
+    Solo los cuyo seq este en `seqs`.
+    """
     pendientes = set(seqs)
 
     def politica(ctx):
@@ -389,7 +436,10 @@ def drop_seqs(*seqs):
 
 
 def drop_datos_sack_nth(*indices):
-    """Tira el n-esimo segmento de datos que sale (1-based, cuenta retransmisiones)."""
+    """Tira el n-esimo segmento de datos que sale.
+
+    1-based, cuenta retransmisiones.
+    """
     objetivo = set(indices)
     contador = {"n": 0}
 
@@ -403,12 +453,18 @@ def drop_datos_sack_nth(*indices):
 
 
 def drop_rango_datos(desde, hasta):
-    """Rafaga: tira los segmentos de datos que salen en las posiciones desde..hasta (inclusive)."""
+    """Rafaga: tira los segmentos de datos que salen.
+
+    En las posiciones desde..hasta (inclusive).
+    """
     return drop_datos_sack_nth(*range(desde, hasta + 1))
 
 
 def drop_acks_sack_nth(*indices):
-    """Tira el n-esimo ACK puro de SACK (los segmentos de datos no cuentan)."""
+    """Tira el n-esimo ACK puro de SACK.
+
+    Los segmentos de datos no cuentan.
+    """
     objetivo = set(indices)
     contador = {"n": 0}
 
@@ -426,11 +482,18 @@ def drop_todos_los_acks_sack():
 
 
 def delay_seq(seq, segundos):
-    """Demora la primera copia del segmento `seq`: llega despues que los siguientes."""
+    """Demora la primera copia del segmento `seq`.
+
+    Llega despues que los siguientes.
+    """
     pendiente = {"si": True}
 
     def politica(ctx):
-        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] == seq and pendiente["si"]:
+        if (
+            es_dato_sack_pkt(ctx.pkt)
+            and ctx.pkt["seq"] == seq
+            and pendiente["si"]
+        ):
             pendiente["si"] = False
             return ("delay", segundos)
         return PASS
@@ -443,7 +506,11 @@ def dup_seq(seq):
     pendiente = {"si": True}
 
     def politica(ctx):
-        if es_dato_sack_pkt(ctx.pkt) and ctx.pkt["seq"] == seq and pendiente["si"]:
+        if (
+            es_dato_sack_pkt(ctx.pkt)
+            and ctx.pkt["seq"] == seq
+            and pendiente["si"]
+        ):
             pendiente["si"] = False
             return DUP
         return PASS
@@ -457,14 +524,19 @@ def todas(*politicas):
     Todas ven cada paquete aunque una anterior ya haya decidido, porque varias
     llevan contadores ("el n-esimo dato") que no pueden saltearse ninguno.
     """
+
     def politica(ctx):
         acciones = [p(ctx) or PASS for p in politicas]
         return next((a for a in acciones if a != PASS), PASS)
+
     return politica
 
 
 def salvo(pred, politica):
-    """Aplica `politica` salvo cuando `pred(ctx)` es verdadero (ahi deja pasar)."""
+    """Aplica `politica` salvo cuando `pred(ctx)` es verdadero.
+
+    Ahi deja pasar.
+    """
     return lambda ctx: PASS if pred(ctx) else politica(ctx)
 
 

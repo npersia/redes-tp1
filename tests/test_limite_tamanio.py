@@ -1,10 +1,12 @@
-"""Limite de tamanio del upload: el cliente declara el tamanio y el servidor decide.
+"""Limite de tamanio del upload: el cliente declara el tamanio y el
+servidor decide.
 
 El header RDT no cambia: todo viaja en el payload, como la accion y el nombre.
 
     cliente                         servidor
     UPLOAD <tamanio> <nombre>  ->
-                               <-   OK                (tamanio <= MAX_FILE_SIZE)
+                               <-   OK                (tamanio <=
+                                    MAX_FILE_SIZE)
     <bytes del archivo>        ->
 
   o bien, en otra ejecucion:
@@ -37,11 +39,14 @@ import lib.file_transfer.file_transfer as ft
 import lib.server as server_app
 from lib.logger.logger import logger
 
-DOS_GB = 2 * 1024 ** 3
+DOS_GB = 2 * 1024**3
 
 
 def args(**kwargs):
-    base = {"verbosity": -1, "protocol": "sw", "host": HOST, "port": 0, "name": None}
+    base = {
+        "verbosity": -1, "protocol": "sw", "host": HOST, "port": 0,
+        "name": None
+    }
     base.update(kwargs)
     return types.SimpleNamespace(**base)
 
@@ -64,6 +69,7 @@ class TransporteFalso:
 # Mensajes (file_transfer.py), sin red
 # ---------------------------------------------------------------------------
 
+
 class TestMensajeDeUpload(unittest.TestCase):
 
     def test_request_upload_manda_tamanio_y_nombre_en_un_mensaje(self):
@@ -72,9 +78,17 @@ class TestMensajeDeUpload(unittest.TestCase):
         self.assertEqual(t.enviados, [b"UPLOAD 1234 a.bin"])
 
     def test_request_upload_con_ok_retorna(self):
-        self.assertIsNone(ft.request_upload(TransporteFalso(b"OK"), "a.bin", 1))
+        self.assertIsNone(
+            ft.request_upload(
+                TransporteFalso(b"OK"),
+                "a.bin",
+                1
+            )
+        )
 
-    def test_request_upload_con_error_levanta_upload_rejected_con_el_motivo(self):
+    def test_request_upload_con_error_levanta_upload_rejected_con_el_motivo(
+            self
+    ):
         t = TransporteFalso(b"ERROR El archivo supera el limite")
         with self.assertRaises(ft.UploadRejected) as cm:
             ft.request_upload(t, "a.bin", 1)
@@ -95,25 +109,35 @@ class TestMensajeDeUpload(unittest.TestCase):
         self.assertFalse(ft.is_upload_request(b"UPLOADX"))
 
     def test_parse_upload_request(self):
-        self.assertEqual(ft.parse_upload_request(b"UPLOAD 5 a.txt"),
-                         ft.UploadRequest(filename="a.txt", size=5))
+        self.assertEqual(
+            ft.parse_upload_request(b"UPLOAD 5 a.txt"),
+            ft.UploadRequest(filename="a.txt", size=5),
+        )
 
     def test_parse_acepta_nombres_con_espacios(self):
-        self.assertEqual(ft.parse_upload_request(b"UPLOAD 3 mi archivo.txt").filename,
-                         "mi archivo.txt")
+        self.assertEqual(
+            ft.parse_upload_request(b"UPLOAD 3 mi archivo.txt").filename,
+            "mi archivo.txt",
+        )
 
     def test_parse_acepta_tamanios_grandes(self):
-        self.assertEqual(ft.parse_upload_request(f"UPLOAD {DOS_GB + 1} a".encode()).size,
-                         DOS_GB + 1)
+        self.assertEqual(
+            ft.parse_upload_request(
+                f"UPLOAD {DOS_GB + 1} a".encode()
+            ).size,
+            DOS_GB + 1
+        )
 
     def test_parse_rechaza_mensajes_mal_formados(self):
-        for mensaje in (b"UPLOAD a.txt",            # sin tamanio
-                        b"UPLOAD diez a.txt",       # tamanio no numerico
-                        b"UPLOAD -5 a.txt",         # tamanio negativo
-                        "UPLOAD ²3 a.txt".encode(),  # digito unicode
-                        b"UPLOAD 5",                # sin nombre
-                        b"UPLOAD 5 ",               # nombre vacio
-                        b"UPLOAD 5 \xff\xfe"):      # utf-8 invalido
+        for mensaje in (
+            b"UPLOAD a.txt",  # sin tamanio
+            b"UPLOAD diez a.txt",  # tamanio no numerico
+            b"UPLOAD -5 a.txt",  # tamanio negativo
+            "UPLOAD ²3 a.txt".encode(),  # digito unicode
+            b"UPLOAD 5",  # sin nombre
+            b"UPLOAD 5 ",  # nombre vacio
+            b"UPLOAD 5 \xff\xfe",
+        ):  # utf-8 invalido
             with self.subTest(mensaje=mensaje):
                 with self.assertRaises(ft.InvalidMessage):
                     ft.parse_upload_request(mensaje)
@@ -128,6 +152,7 @@ class TestConstante(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Con red: Stop & Wait y Selective ACK
 # ---------------------------------------------------------------------------
+
 
 class _Captura(logging.Handler):
     def __init__(self):
@@ -149,7 +174,7 @@ class _LimiteBase:
         self.captura = _Captura()
         logger.addHandler(self.captura)
         self._propagate = logger.propagate
-        logger.propagate = False        # sin ruido en la salida de la suite
+        logger.propagate = False  # sin ruido en la salida de la suite
 
     def tearDown(self):
         logger.removeHandler(self.captura)
@@ -173,15 +198,26 @@ class _LimiteBase:
         def atender():
             conexion = self.aceptar(servidor)
             self._transportes.append(conexion)
-            server_app.handle_connection(conexion, self.storage, threading.Event())
+            server_app.handle_connection(
+                conexion,
+                self.storage,
+                threading.Event()
+            )
 
         hilo = Hilo(atender)
         hilo.start()
         return puerto, hilo
 
     def _upload(self, puerto, origen, nombre="subido.bin"):
-        hilo = Hilo(client_app.upload,
-                    args(protocol=self.protocolo, port=puerto, src=origen, name=nombre))
+        hilo = Hilo(
+            client_app.upload,
+            args(
+                protocol=self.protocolo,
+                port=puerto,
+                src=origen,
+                name=nombre
+            ),
+        )
         hilo.start()
         return hilo
 
@@ -197,9 +233,17 @@ class _LimiteBase:
             servidor.resultado_o_error(15.0)
 
     def _atendido_a_mano(self):
-        """(cliente conectado a mano, hilo con handle_connection del servidor)."""
+        """(
+            cliente conectado a mano,
+            hilo con handle_connection del servidor
+        )."""
         cliente, conexion = self.conectados()
-        hilo = Hilo(server_app.handle_connection, conexion, self.storage, threading.Event())
+        hilo = Hilo(
+            server_app.handle_connection,
+            conexion,
+            self.storage,
+            threading.Event()
+        )
         hilo.start()
         return cliente, hilo
 
@@ -210,7 +254,10 @@ class _LimiteBase:
         return recibiendo.resultado_o_error(timeout)
 
     def _errores(self):
-        return [m for nivel, m in self.captura.mensajes if nivel >= logging.ERROR]
+        return [
+            m for nivel, m in self.captura.mensajes
+            if nivel >= logging.ERROR
+        ]
 
     def _guardado(self, nombre="subido.bin"):
         with open(os.path.join(self.storage, nombre), "rb") as f:
@@ -231,25 +278,39 @@ class _LimiteBase:
 
     def test_upload_un_byte_por_encima_se_rechaza(self):
         self._upload_completo(os.urandom(4001), limite=4000)
-        self.assertEqual(os.listdir(self.storage), [], "el servidor no guarda nada")
+        self.assertEqual(
+            os.listdir(self.storage),
+            [],
+            "el servidor no guarda nada"
+        )
 
     def test_un_upload_rechazado_no_manda_el_archivo(self):
         contenido = os.urandom(6000)
         self._upload_completo(contenido, limite=100)
-        self.assertFalse(any(contenido[:64] in p["payload"] for p in self.net.sent() if p),
-                         "el cliente no debe empezar a mandar el archivo" + self.volcado())
+        self.assertFalse(
+            any(contenido[:64] in p["payload"] for p in self.net.sent() if p),
+            "el cliente no debe empezar a mandar el archivo" + self.volcado(),
+        )
 
     def test_el_cliente_informa_el_rechazo_y_termina(self):
         # _upload_completo espera al cliente con tope: si se colgara, falla
         self._upload_completo(os.urandom(500), limite=100)
 
         errores = self._errores()
-        self.assertTrue(any(m.startswith("[Cliente]") for m in errores),
-                        f"el cliente loguea el motivo del servidor: {errores}")
-        self.assertFalse(any("cerró la conexión" in m for m in errores),
-                         f"es un rechazo, no un corte de conexion: {errores}")
-        self.assertFalse(any("Transferencia completada" in m
-                             for _, m in self.captura.mensajes))
+        self.assertTrue(
+            any(m.startswith("[Cliente]") for m in errores),
+            f"el cliente loguea el motivo del servidor: {errores}",
+        )
+        self.assertFalse(
+            any("cerró la conexión" in m for m in errores),
+            f"es un rechazo, no un corte de conexion: {errores}",
+        )
+        self.assertFalse(
+            any(
+                "Transferencia completada" in m for _,
+                m in self.captura.mensajes
+            )
+        )
 
     def test_upload_de_archivo_vacio_sigue_funcionando(self):
         self._upload_completo(b"")
@@ -317,7 +378,9 @@ class _LimiteBase:
         # no mandamos 2 GB: alcanza con ver que lo acepta
         self.assertEqual(self._recv(cliente), b"OK")
 
-    def test_el_servidor_no_guarda_si_llegan_menos_bytes_que_los_declarados(self):
+    def test_el_servidor_no_guarda_si_llegan_menos_bytes_que_los_declarados(
+            self
+    ):
         cliente, servidor = self._atendido_a_mano()
 
         cliente.send(b"UPLOAD 10 corto.bin")
@@ -327,7 +390,9 @@ class _LimiteBase:
 
         self.assertEqual(os.listdir(self.storage), [])
 
-    def test_el_servidor_no_guarda_si_llegan_mas_bytes_que_los_declarados(self):
+    def test_el_servidor_no_guarda_si_llegan_mas_bytes_que_los_declarados(
+            self
+    ):
         """Si no, declarar poco y mandar mucho saltearia el limite."""
         cliente, servidor = self._atendido_a_mano()
 

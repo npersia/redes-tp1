@@ -24,11 +24,17 @@ class UploadRejected(Exception):
 
 def read_file(filepath):
     size = os.path.getsize(filepath)
-    logger.debug(f"[archivo] leyendo '{filepath}' ({size} bytes) entero a memoria...")
+    logger.debug(
+        f"[archivo] leyendo '{filepath}' ({size} bytes) "
+        f"entero a memoria..."
+    )
     started = time.monotonic()
     with open(filepath, "rb") as file:
         content = file.read()
-    logger.debug(f"[archivo] leidos {len(content)} bytes en {time.monotonic() - started:.2f}s")
+    logger.debug(
+        f"[archivo] leidos {len(content)} bytes en "
+        f"{time.monotonic() - started:.2f}s"
+    )
     return content
 
 
@@ -36,11 +42,17 @@ def write_file(filepath, content):
     directory = os.path.dirname(filepath)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    logger.debug(f"[archivo] escribiendo {len(content)} bytes en '{filepath}'...")
+    logger.debug(
+        f"[archivo] escribiendo {len(content)} bytes en "
+        f"'{filepath}'..."
+    )
     started = time.monotonic()
     with open(filepath, "wb") as file:
         file.write(content)
-    logger.debug(f"[archivo] escritos {len(content)} bytes en {time.monotonic() - started:.2f}s")
+    logger.debug(
+        f"[archivo] escritos {len(content)} bytes en "
+        f"{time.monotonic() - started:.2f}s"
+    )
 
 
 def send_file(transport, filepath):
@@ -70,6 +82,7 @@ def receive_file(transport, filepath):
     write_file(filepath, content)
     return len(content)
 
+
 def request_upload(transport, filename, size):
     """Pide subir el archivo: 'UPLOAD <tamanio> <nombre>'.
 
@@ -81,7 +94,9 @@ def request_upload(transport, filename, size):
     if response == OK:
         return
     if response.startswith(ERROR_PREFIX):
-        raise UploadRejected(response[len(ERROR_PREFIX):].decode("utf-8", errors="replace"))
+        raise UploadRejected(
+            response[len(ERROR_PREFIX):].decode("utf-8", errors="replace")
+        )
     raise UploadRejected("Respuesta inesperada del servidor.")
 
 
@@ -92,7 +107,9 @@ def is_upload_request(content):
 def parse_upload_request(content):
     """'UPLOAD <tamanio> <nombre>' -> UploadRequest; si no, InvalidMessage."""
     try:
-        size_text, filename = content[len(UPLOAD_PREFIX):].decode("utf-8").split(" ", 1)
+        size_text, filename = (
+            content[len(UPLOAD_PREFIX):].decode("utf-8").split(" ", 1)
+        )
     except (UnicodeDecodeError, ValueError):
         raise InvalidMessage("Formato de UPLOAD inválido.")
     if not (size_text.isascii() and size_text.isdigit()) or not filename:

@@ -25,7 +25,9 @@ class TestTodoBien(SACKTestCase):
     def test_tamanios_en_las_dos_direcciones(self):
         for nombre_tam, tam in TAMANIOS.items():
             datos = os.urandom(tam)
-            for direccion, emisor, receptor, rol_e, rol_r in self.direcciones():
+            for (
+                    direccion, emisor, receptor, rol_e, rol_r
+            ) in self.direcciones():
                 with self.subTest(tamanio=nombre_tam, direccion=direccion):
                     self.net.entries.clear()
                     recibido = self.transferir(emisor, receptor, datos)
@@ -33,10 +35,18 @@ class TestTodoBien(SACKTestCase):
 
                     copias = self.copias_por_seq(rol_e)
                     segmentos = -(-tam // MAX)
-                    self.assertEqual(len(copias), segmentos,
-                                     f"cantidad de segmentos{self.volcado()}")
-                    self.assertTrue(all(n == 1 for n in copias.values()),
-                                    f"en una red limpia no se retransmite nada{self.volcado()}")
+                    self.assertEqual(
+                        len(copias),
+                        segmentos,
+                        f"cantidad de segmentos{self.volcado()}"
+                    )
+                    self.assertTrue(
+                        all(n == 1 for n in copias.values()),
+                        (
+                            f"en una red limpia no se retransmite nada"
+                            f"{self.volcado()}"
+                        ),
+                    )
                     self.assertVentanaRespetada(rol_e, rol_r)
 
     def test_archivo_vacio_manda_solo_el_fin(self):
@@ -51,7 +61,10 @@ class TestTodoBien(SACKTestCase):
     def test_archivo_grande(self):
         datos = os.urandom(2 * 1024 * 1024 + 3)
         cliente, conexion = self.conectados()
-        self.assertEqual(self.transferir(cliente, conexion, datos, timeout=60), datos)
+        self.assertEqual(
+            self.transferir(cliente, conexion, datos, timeout=60),
+            datos
+        )
         self.assertVentanaRespetada("cliente", "servidor")
 
 
@@ -68,7 +81,11 @@ class TestFormaDeLosSegmentos(SACKTestCase):
 
     def test_protocolo_y_version(self):
         for p in self.segmentos:
-            self.assertPaquete(p, protocol=sack.SelectiveAck.PROTOCOL_ID, version=1)
+            self.assertPaquete(
+                p,
+                protocol=sack.SelectiveAck.PROTOCOL_ID,
+                version=1
+            )
 
     def test_seqs_consecutivos_por_bytes(self):
         seqs = [p["seq"] for p in self.segmentos]
@@ -78,15 +95,22 @@ class TestFormaDeLosSegmentos(SACKTestCase):
         self.assertEqual([p["FIN"] for p in self.segmentos], [0, 0, 0, 1])
 
     def test_payloads_al_maximo_salvo_el_ultimo(self):
-        self.assertEqual([len(p["payload"]) for p in self.segmentos], [MAX, MAX, MAX, 10])
+        self.assertEqual(
+            [len(p["payload"]) for p in self.segmentos], [MAX, MAX, MAX, 10]
+        )
 
     def test_los_datos_llevan_el_ack_acumulativo(self):
-        """Asi un peer trabado en el handshake lo puede cerrar con el primer dato."""
+        """Asi un peer trabado en el handshake lo puede cerrar con el
+        primer dato."""
         for p in self.segmentos:
             self.assertPaquete(p, ACK=1, ack=self.cliente.receiver.rcv_next)
 
     def test_los_acks_son_acumulativos_y_crecientes(self):
-        acks = [p["ack"] for p in self.net.wire("servidor") if netsim.es_ack_puro_sack_pkt(p)]
+        acks = [
+            p["ack"]
+            for p in self.net.wire("servidor")
+            if netsim.es_ack_puro_sack_pkt(p)
+        ]
         self.assertEqual(acks, sorted(acks))
         self.assertEqual(acks[-1], 1 + len(self.datos))
 
@@ -104,12 +128,16 @@ class TestFormaDeLosSegmentos(SACKTestCase):
 class TestVariasTransferenciasPorConexion(SACKTestCase):
 
     def test_dos_send_seguidos_por_la_misma_conexion(self):
-        """El seq sigue de un send() al siguiente, como en el protocolo de aplicacion."""
+        """El seq sigue de un send() al siguiente, como en el protocolo de
+        aplicacion."""
         cliente, conexion = self.conectados()
         pedido = b"DOWNLOAD x"
         self.assertEqual(self.transferir(cliente, conexion, pedido), pedido)
         respuesta = os.urandom(MAX * 2 + 1)
-        self.assertEqual(self.transferir(conexion, cliente, respuesta), respuesta)
+        self.assertEqual(
+            self.transferir(conexion, cliente, respuesta),
+            respuesta
+        )
         otra = os.urandom(MAX + 5)
         self.assertEqual(self.transferir(cliente, conexion, otra), otra)
 

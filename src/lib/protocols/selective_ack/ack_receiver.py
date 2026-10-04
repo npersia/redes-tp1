@@ -1,10 +1,15 @@
 from lib.protocols.selective_ack.sack_option import add_block, discard_below
 
 # What accept() did with a segment, so the caller can report it.
-DELIVERED = "delivered"          # it was the next one: its bytes (and maybe more) were delivered
-BUFFERED = "buffered"            # it came ahead of a hole: kept until the hole is filled
-DUPLICATE = "duplicate"          # we already had it, delivered or buffered
-OUT_OF_WINDOW = "out_of_window"  # too far ahead for the receive window: dropped
+DELIVERED = (
+    "delivered"  # it was the next one: its bytes (and maybe
+    # more) were delivered
+)
+BUFFERED = "buffered"  # it came ahead of a hole: kept until the
+# hole is filled
+DUPLICATE = "duplicate"  # we already had it, delivered or buffered
+OUT_OF_WINDOW = "out_of_window"  # too far ahead for the receive
+# window: dropped
 
 
 class ACKReceiver:
@@ -55,8 +60,9 @@ class ACKReceiver:
         # Hole filled: deliver the bytes of the segments that were waiting
         # right after it, and then the ones after those.
         while self.rcv_next in self.out_of_order:
-            pending_n_bytes, pending_payload = self.out_of_order.pop(
-                self.rcv_next)
+            pending_n_bytes, pending_payload = (
+                self.out_of_order.pop(self.rcv_next)
+            )
             delivered.extend(pending_payload)
             self.rcv_next += pending_n_bytes
 

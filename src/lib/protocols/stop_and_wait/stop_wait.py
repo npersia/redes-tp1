@@ -15,31 +15,26 @@ from lib.protocols.stop_and_wait.trace import RecvTrace, SendTrace
 MAX_PAYLOAD_SIZE = 1400
 
 
-# OJO QUE CAMBIO LA CABECERA PORQUE ES UDP, NECESITO SABER EL REMOTE ADDRESS PARA TRABAJAR. TCP ME LO DABA
+# OJO QUE CAMBIO LA CABECERA PORQUE ES UDP, NECESITO SABER EL
+# REMOTE ADDRESS PARA TRABAJAR. TCP ME LO DABA
 class StopAndWait(BaseTransport):
     PROTOCOL_ID = 1
     TAG = "SW"
 
-    ###################################################################################################################
     # ACA TERMINA EL HANDSHAKE, YA ESTA EN BASE_TRANSPORT
-    ###################################################################################################################
 
-    # SW no sobreescribe _init_peer: no necesita estado extra, con los numeros
-    # de secuencia y la sesion abierta alcanza.
+    # SW no sobreescribe _init_peer: no necesita estado extra, con los
+    # numeros de secuencia y la sesion abierta alcanza.
 
-    ###################################################################################################################
     # ACA EMPIEZA LA TRANSFERENCIA
-    ###################################################################################################################
 
-
-    ###################################################################################################################
     # ACA TERMINA EL HANDSHAKE, HAY QUE MOVERLO A BASE_TRANSPORT
-    ###################################################################################################################
-
 
     def send(self, data: bytes) -> None:
         if self.is_closed or self.sock is None:
-            raise ConnectionClosed("the socket is not initialized or the connection is closed")
+            raise ConnectionClosed(
+                "the socket is not initialized or the connection is closed"
+            )
 
         chunks = []
 
@@ -48,29 +43,35 @@ class StopAndWait(BaseTransport):
         if not chunks:
             chunks = [b""]
 
-        trace = SendTrace(len(data), len(chunks), MAX_PAYLOAD_SIZE,
-                          self.remote_address, self.sequence_number)
+        trace = SendTrace(
+            len(data),
+            len(chunks),
+            MAX_PAYLOAD_SIZE,
+            self.remote_address,
+            self.sequence_number,
+        )
 
         for i, chunk in enumerate(chunks):
             if self.cancel_requested.is_set():
                 self.notify_abort()
                 trace.cancelled()
-                raise TransferCancelled(f"Transferencia cancelada por el usuario: {trace.balance}.")
+                raise TransferCancelled(
+                    f"Transferencia cancelada por el usuario: {trace.balance}."
+                )
 
-            last = (i == len(chunks) - 1)
+            last = i == len(chunks) - 1
             if last:
                 flags = packet.FIN_MASK
             else:
                 flags = 0
             payload_len = len(chunk)
 
-
             pkt = packet.make_packet(
                 version=VERSION,
                 protocol=self.PROTOCOL_ID,
                 flags=flags,
                 sequence_number=self.sequence_number,
-                payload=chunk
+                payload=chunk,
             )
 
             if payload_len > 0:
@@ -91,7 +92,10 @@ class StopAndWait(BaseTransport):
                     self.sock.settimeout(self.timeout)
 
                     resp, addr = self.sock.recvfrom(RECV_BUFFER)
-                    if addr != self.remote_address or not packet.is_valid(resp):
+                    if (
+                        addr != self.remote_address
+                        or not packet.is_valid(resp)
+                    ):
                         trace.stray(addr, expected_ack)
                         continue
 
@@ -101,9 +105,13 @@ class StopAndWait(BaseTransport):
                         if packet.get_flag_CANCEL(flags_byte):
                             trace.remote_cancel()
                             raise TransferCancelled(
-                                f"El otro extremo canceló la transferencia: {trace.balance}.")
+                                "El otro extremo canceló la transferencia: "
+                                f"{trace.balance}."
+                            )
                         trace.remote_error()
-                        raise ConnectionClosed("El remoto notificó un error con flag ERR.")
+                        raise ConnectionClosed(
+                            "El remoto notificó un error con flag ERR."
+                        )
 
                     if not packet.get_flag_ACK(flags_byte):
                         # Un dato que ya entrego recv(): el otro no vio el ACK
@@ -120,7 +128,8 @@ class StopAndWait(BaseTransport):
                     ack_num = packet.get_header_ack(resp)
                     if ack_num == expected_ack:
                         ack_received = True
-                        self.sequence_number = expected_ack  # se incrementa el seq number en n bytes
+                        # se incrementa el seq number en n bytes
+                        self.sequence_number = expected_ack
                     else:
                         trace.bad_ack(ack_num, expected_ack)
                 except socket.timeout:
@@ -129,7 +138,10 @@ class StopAndWait(BaseTransport):
                     if self.cancel_requested.is_set():
                         self.notify_abort()
                         trace.cancelled(retransmitiendo=True)
-                        raise TransferCancelled(f"Transferencia cancelada por el usuario: {trace.balance}.")
+                        raise TransferCancelled(
+                            "Transferencia cancelada por el usuario: "
+                            f"{trace.balance}."
+                        )
 
             if not ack_received:
                 trace.gave_up(self.sequence_number, self.max_retries)
@@ -139,21 +151,29 @@ class StopAndWait(BaseTransport):
 
         trace.done()
 
-
     def recv(self) -> bytes:
         if self.is_closed or self.sock is None:
-            raise ConnectionClosed("the socket is not initialized or the connection is closed")
+            raise ConnectionClosed(
+                "the socket is not initialized or the connection is closed"
+            )
 
         received_buffer = bytearray()
         self.sock.settimeout(self.timeout)
 
-        trace = RecvTrace(self.remote_address, self.exp_sequence_number, self.timeout)
+        trace = RecvTrace(
+            self.remote_address,
+            self.exp_sequence_number,
+            self.timeout,
+        )
 
         while True:
             if self.cancel_requested.is_set():
                 self.notify_abort()
                 trace.cancelled()
-                raise TransferCancelled(f"Recepcion cancelada por el usuario: {trace.bytes} bytes recibidos.")
+                raise TransferCancelled(
+                    "Recepcion cancelada por el usuario: "
+                    f"{trace.bytes} bytes recibidos."
+                )
 
             try:
                 data, addr = self.sock.recvfrom(RECV_BUFFER)
@@ -168,12 +188,18 @@ class StopAndWait(BaseTransport):
                         trace.remote_cancel()
                         raise TransferCancelled(
                             f"El otro extremo canceló la transferencia: "
-                            f"{trace.bytes} bytes recibidos.")
+                            f"{trace.bytes} bytes recibidos."
+                        )
                     trace.remote_error()
-                    raise ConnectionClosed("Transferencia abortada por error remoto (ERR flag).")
+                    raise ConnectionClosed(
+                        "Transferencia abortada por error remoto (ERR flag)."
+                    )
 
                 # Si retransmiten el SYN-ACK del handshake
-                if packet.get_flag_SYN(flags_byte) and packet.get_flag_ACK(flags_byte):
+                if (
+                    packet.get_flag_SYN(flags_byte)
+                    and packet.get_flag_ACK(flags_byte)
+                ):
                     trace.syn_ack_again()
                     self.send_ack()
                     continue
@@ -186,7 +212,8 @@ class StopAndWait(BaseTransport):
                     payload_len = len(payload)
                     received_buffer.extend(payload)
 
-                    # Avanzamos el apuntador de recepción la cantidad de bytes recibidos
+                    # Avanzamos el apuntador de recepción la cantidad
+                    # de bytes recibidos
                     if payload_len > 0:
                         packet_bytes = payload_len
                     else:
@@ -223,6 +250,6 @@ class StopAndWait(BaseTransport):
             protocol=self.PROTOCOL_ID,
             flags=packet.ACK_MASK,
             sequence_number=self.sequence_number,
-            ack=self.exp_sequence_number
+            ack=self.exp_sequence_number,
         )
         self.sock.sendto(ack_pkt, self.remote_address)

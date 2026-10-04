@@ -1,4 +1,5 @@
-"""Selective ACK: errores remotos, trafico ajeno, datagramas invalidos, silencio, bordes del receptor y cierre.
+"""Selective ACK: errores remotos, trafico ajeno, datagramas invalidos,
+silencio, bordes del receptor y cierre.
 
 Casi todo contra un peer crudo (SACKTestCase.transporte_a_mano) para controlar
 exactamente que llega y que sale.
@@ -7,7 +8,15 @@ exactamente que llega y que sale.
 import time
 import unittest
 
-from base import ConnectionClosed, Hilo, SACKTestCase, TransferCancelled, bt, netsim, packet, sack
+from base import (
+    ConnectionClosed,
+    Hilo,
+    SACKTestCase,
+    TransferCancelled,
+    bt,
+    packet,
+    sack,
+    )
 
 PROTO = sack.SelectiveAck.PROTOCOL_ID
 
@@ -24,8 +33,14 @@ class ConPeer(SACKTestCase):
         self.mandar(peer, t, flags=flags, sequence_number=seq, payload=payload)
 
     def ack(self, peer, t, ack, bloques=()):
-        self.mandar(peer, t, flags=packet.ACK_MASK, sequence_number=1, ack=ack,
-                    options=sack.make_sack_option(list(bloques)))
+        self.mandar(
+            peer,
+            t,
+            flags=packet.ACK_MASK,
+            sequence_number=1,
+            ack=ack,
+            options=sack.make_sack_option(list(bloques)),
+            )
 
     def recibir_en_hilo(self, t):
         hilo = Hilo(t.recv)
@@ -65,7 +80,13 @@ class TestErrorRemoto(ConPeer):
         enviando = Hilo(t.send, b"x" * 10)
         enviando.start()
         peer.recv()
-        self.mandar(peer, t, flags=packet.ERR_MASK | packet.ACK_MASK, sequence_number=1, ack=1011)
+        self.mandar(
+            peer,
+            t,
+            flags=packet.ERR_MASK | packet.ACK_MASK,
+            sequence_number=1,
+            ack=1011,
+            )
         with self.assertRaises(ConnectionClosed):
             enviando.resultado_o_error()
 
@@ -78,7 +99,10 @@ class TestTraficoAjeno(ConPeer):
         recibiendo = self.recibir_en_hilo(t)
 
         self.dato(intruso, t, 2000, b"falso", fin=True)
-        self.assertIsNone(intruso.try_recv(0.1)[0], "al tercero no se le contesta")
+        self.assertIsNone(
+            intruso.try_recv(0.1)[0],
+            "al tercero no se le contesta"
+        )
         self.dato(peer, t, 2000, b"bueno", fin=True)
         self.assertEqual(recibiendo.resultado_o_error(), b"bueno")
 
@@ -91,7 +115,10 @@ class TestTraficoAjeno(ConPeer):
 
         self.ack(intruso, t, 1011)
         time.sleep(0.02)
-        self.assertTrue(enviando.is_alive(), "el ACK del tercero no confirma nada")
+        self.assertTrue(
+            enviando.is_alive(),
+            "el ACK del tercero no confirma nada"
+        )
         self.ack(peer, t, 1011)
         enviando.resultado_o_error()
 
@@ -113,10 +140,10 @@ class TestTraficoAjeno(ConPeer):
 BASURA = (
     b"",
     b"\x00",
-    b"\x12\x10",                                   # 2 bytes, con el flag ACK
-    bytes([0x12, packet.ACK_MASK, 40]) + b"\0" * 9,   # hlen=40 en 12 bytes
-    bytes([0x12, packet.ACK_MASK, 5]) + b"\0" * 9,    # hlen menor que el header
-)
+    b"\x12\x10",  # 2 bytes, con el flag ACK
+    bytes([0x12, packet.ACK_MASK, 40]) + b"\0" * 9,  # hlen=40 en 12 bytes
+    bytes([0x12, packet.ACK_MASK, 5]) + b"\0" * 9,  # hlen menor que el header
+    )
 
 
 class TestDatagramasInvalidos(ConPeer):
@@ -127,7 +154,10 @@ class TestDatagramasInvalidos(ConPeer):
         recibiendo = self.recibir_en_hilo(t)
         for basura in BASURA:
             peer.send(basura, t.sock.getsockname())
-        self.assertIsNone(peer.try_recv(0.1)[0], "a la basura no se le contesta")
+        self.assertIsNone(
+            peer.try_recv(0.1)[0],
+            "a la basura no se le contesta"
+        )
         self.dato(peer, t, 2000, b"sigue vivo", fin=True)
         self.assertEqual(recibiendo.resultado_o_error(), b"sigue vivo")
 
@@ -155,7 +185,7 @@ class TestReceptorSinRespuesta(ConPeer):
     puede estar leyendo un archivo grande a memoria, y eso no es silencio.
     """
 
-    MARGEN = 1.0    # holgura del scheduler para el limite superior
+    MARGEN = 1.0  # holgura del scheduler para el limite superior
     # Mas reintentos que el resto para estirar el limite a 0.6 s: los tests que
     # mantienen viva la conexion mandan cada limite/6, y asi una demora del
     # scheduler de ~0.5 s en el hilo del test no la deja morir por error.
@@ -173,31 +203,49 @@ class TestReceptorSinRespuesta(ConPeer):
             recibiendo.resultado_o_error(self.limite() + self.MARGEN + 1)
         transcurrido = time.monotonic() - inicio
         self.assertNotIsInstance(cm.exception, TransferCancelled)
-        self.assertGreaterEqual(transcurrido, self.limite() * 0.95, "no antes del limite")
+        self.assertGreaterEqual(
+            transcurrido, self.limite() * 0.95, "no antes del limite"
+            )
         self.assertLessEqual(transcurrido, self.limite() + self.MARGEN)
 
     def test_antes_del_primer_dato_espera_sin_limite(self):
-        """El emisor tarda en arrancar (archivo grande a memoria): no se rinde."""
+        """El emisor tarda en arrancar (archivo grande a memoria): no se rinde.
+        """
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = self.recibir_en_hilo(t)
         time.sleep(self.limite() * 2.5)
-        self.assertTrue(recibiendo.is_alive(), f"se rindio sin datos todavia: {recibiendo.error!r}")
+        self.assertTrue(
+            recibiendo.is_alive(),
+            f"se rindio sin datos todavia: {recibiendo.error!r}"
+        )
         self.dato(peer, t, 2000, b"ab", fin=True)
         self.assertEqual(recibiendo.resultado_o_error(), b"ab")
 
     def test_un_syn_ack_repetido_no_arranca_la_cuenta(self):
-        """Solo un segmento de datos arma el limite, no el SYN-ACK del handshake."""
+        """Solo un segmento de datos arma el limite, no el SYN-ACK del
+        handshake.
+        """
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = self.recibir_en_hilo(t)
-        self.mandar(peer, t, flags=packet.SYN_MASK | packet.ACK_MASK,
-                    sequence_number=1999, ack=1000)
+        self.mandar(
+            peer,
+            t,
+            flags=packet.SYN_MASK | packet.ACK_MASK,
+            sequence_number=1999,
+            ack=1000,
+            )
         time.sleep(self.limite() * 2.5)
-        self.assertTrue(recibiendo.is_alive(), f"se rindio sin datos todavia: {recibiendo.error!r}")
+        self.assertTrue(
+            recibiendo.is_alive(),
+            f"se rindio sin datos todavia: {recibiendo.error!r}"
+        )
         self.dato(peer, t, 2000, b"ab", fin=True)
         self.assertEqual(recibiendo.resultado_o_error(), b"ab")
 
     def test_cada_dato_reinicia_la_cuenta(self):
-        """Con datos llegando cada medio limite, sigue vivo mucho mas que un limite."""
+        """Con datos llegando cada medio limite, sigue vivo mucho mas que un
+        limite.
+        """
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = self.recibir_en_hilo(t)
         seq = 2000
@@ -206,7 +254,10 @@ class TestReceptorSinRespuesta(ConPeer):
             self.dato(peer, t, seq, b"z")
             seq += 1
             time.sleep(self.limite() / 6)
-            self.assertTrue(recibiendo.is_alive(), f"se rindio con datos llegando: {recibiendo.error!r}")
+            self.assertTrue(
+                recibiendo.is_alive(),
+                f"se rindio con datos llegando: {recibiendo.error!r}",
+                )
         self.dato(peer, t, seq, b"z", fin=True)
         self.assertEqual(len(recibiendo.resultado_o_error()), seq - 2000 + 1)
 
@@ -219,7 +270,10 @@ class TestReceptorSinRespuesta(ConPeer):
         while time.monotonic() < fin:
             self.dato(peer, t, 2000, b"a")
             time.sleep(self.limite() / 6)
-            self.assertTrue(recibiendo.is_alive(), f"se rindio con duplicados llegando: {recibiendo.error!r}")
+            self.assertTrue(
+                recibiendo.is_alive(),
+                f"se rindio con duplicados llegando: {recibiendo.error!r}",
+                )
         self.dato(peer, t, 2001, b"b", fin=True)
         self.assertEqual(recibiendo.resultado_o_error(), b"ab")
 
@@ -229,13 +283,19 @@ class TestReceptorSinRespuesta(ConPeer):
         recibiendo = self.recibir_en_hilo(t)
         inicio = time.monotonic()
         self.dato(peer, t, 2000, b"a")  # arma el limite
-        while recibiendo.is_alive() and time.monotonic() - inicio < self.limite() * 3:
+        while (
+            recibiendo.is_alive() and
+            time.monotonic() - inicio < self.limite() * 3
+        ):
             peer.send(b"\x00", t.sock.getsockname())
             self.dato(intruso, t, 2000, b"intruso")
             time.sleep(self.timeout / 4)
         with self.assertRaises(ConnectionClosed):
             recibiendo.resultado_o_error()
-        self.assertLessEqual(time.monotonic() - inicio, self.limite() + self.MARGEN)
+        self.assertLessEqual(
+            time.monotonic() - inicio,
+            self.limite() + self.MARGEN
+        )
 
 
 class TestBordesDelReceptor(ConPeer):
@@ -263,7 +323,9 @@ class TestBordesDelReceptor(ConPeer):
         recibiendo.esperar(1.0)
 
     def test_fin_que_llega_antes_que_el_hueco(self):
-        """El FIN bufferado no termina la recepcion hasta que se llena el hueco."""
+        """El FIN bufferado no termina la recepcion hasta que se llena el
+        hueco.
+        """
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = self.recibir_en_hilo(t)
         self.dato(peer, t, 2005, b"mundo", fin=True)
@@ -275,7 +337,12 @@ class TestBordesDelReceptor(ConPeer):
     def test_fin_vacio(self):
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = self.recibir_en_hilo(t)
-        self.mandar(peer, t, flags=packet.FIN_MASK | packet.ACK_MASK, sequence_number=2000)
+        self.mandar(
+            peer,
+            t,
+            flags=packet.FIN_MASK | packet.ACK_MASK,
+            sequence_number=2000
+        )
         self.assertEqual(recibiendo.resultado_o_error(), b"")
         p, _ = peer.recv()
         self.assertPaquete(p, ack=2001)
@@ -291,10 +358,18 @@ class TestBordesDelReceptor(ConPeer):
         self.assertEqual(recibiendo.resultado_o_error(), b"ok")
 
     def test_syn_ack_retransmitido_se_contesta_con_el_ack(self):
-        """Se perdio el ACK final del handshake: el servidor reenvia el SYN-ACK."""
+        """Se perdio el ACK final del handshake: el servidor reenvia el
+        SYN-ACK.
+        """
         t, peer = self.transporte_a_mano(seq=1000, exp=2000)
         recibiendo = self.recibir_en_hilo(t)
-        self.mandar(peer, t, flags=packet.SYN_MASK | packet.ACK_MASK, sequence_number=1999, ack=1000)
+        self.mandar(
+            peer,
+            t,
+            flags=packet.SYN_MASK | packet.ACK_MASK,
+            sequence_number=1999,
+            ack=1000,
+            )
         p, _ = peer.recv()
         self.assertPaquete(p, ACK=1, SYN=0, ack=2000)
         t.close()
@@ -360,13 +435,22 @@ class TestEstadoCerrado(ConPeer):
             enviando.resultado_o_error()
 
     def test_shutdown_avisa_al_otro_extremo(self):
-        """Heredado de BaseTransport: ERR+CANCEL x ABORT_NOTICES con el protocolo de SACK."""
+        """Heredado de BaseTransport: ERR+CANCEL x ABORT_NOTICES con el
+        protocolo de SACK.
+        """
         t, peer = self.transporte_a_mano(seq=1000, exp=2000)
         t.shutdown()
         avisos = peer.drain()
         self.assertEqual(len(avisos), bt.ABORT_NOTICES)
         for p in avisos:
-            self.assertPaquete(p, ERR=1, CANCEL=1, protocol=PROTO, seq=1000, ack=2000)
+            self.assertPaquete(
+                p,
+                ERR=1,
+                CANCEL=1,
+                protocol=PROTO,
+                seq=1000,
+                ack=2000
+            )
 
     def test_recv_con_is_closed_y_el_socket_abierto(self):
         """Rama del timeout: alguien marco is_closed sin cerrar el socket."""

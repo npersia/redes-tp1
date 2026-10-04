@@ -13,18 +13,18 @@ if SRC not in sys.path:
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import lib.protocols.packet.packet as packet                      # noqa: E402
-import lib.protocols.base_transport as bt                         # noqa: E402
-import lib.protocols.listener as listener                         # noqa: E402
-import lib.protocols.stop_and_wait.stop_wait as sw                # noqa: E402
-import lib.protocols.selective_ack.selective_ack as sack          # noqa: E402
-from lib.protocols.base_transport import (                        # noqa: E402
+import lib.protocols.packet.packet as packet  # noqa: E402, F401
+import lib.protocols.base_transport as bt  # noqa: E402
+import lib.protocols.listener as listener  # noqa: E402
+import lib.protocols.stop_and_wait.stop_wait as sw  # noqa: E402
+import lib.protocols.selective_ack.selective_ack as sack  # noqa: E402
+from lib.protocols.base_transport import (  # noqa: E402, F401
     ConnectionClosed,
     TransferCancelled,
 )
 
-import netsim                                                     # noqa: E402
-from netsim import Net, RawPeer, parse                            # noqa: E402
+import netsim  # noqa: E402
+from netsim import Net, RawPeer, parse  # noqa: E402, F401
 
 HOST = "127.0.0.1"
 
@@ -48,7 +48,7 @@ class Hilo(threading.Thread):
     def run(self):
         try:
             self.resultado = self._fn(*self._args, **self._kwargs)
-        except BaseException as e:      # noqa: BLE001 - queremos capturar todo
+        except BaseException as e:  # noqa: BLE001 - queremos capturar todo
             self.error = e
 
     def esperar(self, timeout=5.0):
@@ -76,8 +76,12 @@ class SWTestCase(unittest.TestCase):
         self.net = Net()
         # El handshake vive en base_transport (cliente) y listener (servidor),
         # y send/recv en cada protocolo: todos tienen que usar la red simulada.
-        self._parches = [self.net.patch(sw), self.net.patch(bt),
-                         self.net.patch(listener), self.net.patch(sack)]
+        self._parches = [
+            self.net.patch(sw),
+            self.net.patch(bt),
+            self.net.patch(listener),
+            self.net.patch(sack),
+        ]
         for parche in self._parches:
             parche.__enter__()
 
@@ -116,7 +120,8 @@ class SWTestCase(unittest.TestCase):
         return s
 
     def aceptar(self, servidor, timeout=5.0):
-        """accept() reintentando: devuelve None si vence su timeout sin conexion.
+        """accept() reintentando: devuelve None si vence su timeout
+        sin conexion.
 
         Es el mismo patron que usa Dispatcher.start() en src/lib/server.py.
         """
@@ -156,7 +161,8 @@ class SWTestCase(unittest.TestCase):
     def assertPaquete(self, pkt, **esperado):
         for clave, valor in esperado.items():
             self.assertEqual(
-                pkt[clave], valor,
+                pkt[clave],
+                valor,
                 f"campo {clave}: esperaba {valor!r}, llego {pkt[clave]!r} "
                 f"en {netsim.describe(pkt)}",
             )
@@ -187,7 +193,9 @@ class SACKTestCase(SWTestCase):
         """
         peer = self.peer()
         t = sack.SelectiveAck(HOST, peer.addr[1])
-        t.sock = sack.socket.socket(sack.socket.AF_INET, sack.socket.SOCK_DGRAM)
+        t.sock = sack.socket.socket(
+            sack.socket.AF_INET, sack.socket.SOCK_DGRAM
+        )
         t.sock.bind((HOST, 0))
         t.sock.role = "local"
         t.remote_address = peer.addr
@@ -208,8 +216,10 @@ class SACKTestCase(SWTestCase):
         return recibiendo.resultado_o_error(timeout)
 
     def direcciones(self, emisor=None, receptor=None):
-        """Las dos direcciones de una conexion real: (nombre, emisor, receptor, rol del emisor, rol del receptor).
+        """Las dos direcciones de una conexion real.
 
+        Retorna tuplas de (nombre, emisor, receptor, rol_del_emisor,
+        rol_del_receptor).
         `emisor` y `receptor` son fabricas de politicas (sin argumentos): las
         politicas llevan estado, asi que cada direccion arma las suyas sobre su
         propia conexion.
@@ -218,50 +228,72 @@ class SACKTestCase(SWTestCase):
             pol_e = emisor() if emisor else None
             pol_r = receptor() if receptor else None
             if nombre == "cliente->servidor":
-                cliente, conexion = self.conectados(policy_cliente=pol_e, policy_servidor=pol_r)
+                cliente, conexion = self.conectados(
+                    policy_cliente=pol_e, policy_servidor=pol_r
+                )
                 yield nombre, cliente, conexion, "cliente", "servidor"
             else:
-                cliente, conexion = self.conectados(policy_cliente=pol_r, policy_servidor=pol_e)
+                cliente, conexion = self.conectados(
+                    policy_cliente=pol_r, policy_servidor=pol_e
+                )
                 yield nombre, conexion, cliente, "servidor", "cliente"
 
     def assertVentanaRespetada(self, rol_emisor, rol_receptor, cwnd=None):
         """Nunca hay mas de CWND segmentos nuevos sin confirmar.
 
         Por causalidad: para que el emisor mande su k-esimo segmento nuevo, el
-        receptor tuvo que haber emitido antes un ACK que cubra el (k-CWND)-esimo.
+        receptor tuvo que haber emitido antes un ACK que cubra el
+        (k-CWND)-esimo.
         """
         cwnd = cwnd or sack.CWND
-        nuevos = []         # end de cada seq nuevo, en orden de salida
+        nuevos = []  # end de cada seq nuevo, en orden de salida
         vistos = set()
         mejor_ack = 0
         for _, rol, evento, _, p in self.net.entries:
             if not p or evento not in ("tx", "drop", "delay"):
                 continue
-            if rol == rol_receptor and netsim.es_ack_puro_sack_pkt(p) and evento == "tx":
+            if (
+                rol == rol_receptor
+                and netsim.es_ack_puro_sack_pkt(p)
+                and evento == "tx"
+            ):
                 mejor_ack = max(mejor_ack, p["ack"])
-            elif rol == rol_emisor and netsim.es_dato_sack_pkt(p) and p["seq"] not in vistos:
+            elif (
+                rol == rol_emisor
+                and netsim.es_dato_sack_pkt(p)
+                and p["seq"] not in vistos
+            ):
                 vistos.add(p["seq"])
                 nuevos.append(p["seq"] + (len(p["payload"]) or 1))
                 # el volcado se arma solo si falla: es todo el trafico
                 if len(nuevos) > cwnd and mejor_ack < nuevos[-cwnd - 1]:
-                    self.fail(f"salio el segmento nuevo #{len(nuevos)} con {cwnd} sin confirmar"
-                              f"{self.volcado()}")
+                    self.fail(
+                        f"salio el segmento nuevo #{len(nuevos)} con {cwnd} "
+                        f"sin confirmar{self.volcado()}"
+                    )
 
     def tiempos_por_seq(self, role):
-        """seq -> instantes (s) en que salio cada copia de ese segmento desde `role`,
-        se haya perdido o no."""
+        """seq -> instantes (s) en que salio cada copia de ese segmento
+        desde `role`, se haya perdido o no."""
         tiempos = {}
         for t, rol, evento, _, p in self.net.entries:
-            if rol == role and evento in ("tx", "drop", "delay") and p and netsim.es_dato_sack_pkt(p):
+            if (
+                rol == role
+                and evento in ("tx", "drop", "delay")
+                and p
+                and netsim.es_dato_sack_pkt(p)
+            ):
                 tiempos.setdefault(p["seq"], []).append(t)
         return tiempos
 
     def datos_en_el_cable(self, role):
-        """Segmentos de datos (payload o FIN) que salieron de `role`, sin los tirados."""
+        """Segmentos de datos (payload o FIN) que salieron de `role`,
+        sin los tirados."""
         return [p for p in self.net.wire(role) if netsim.es_dato_sack_pkt(p)]
 
     def copias_por_seq(self, role, incluir_drops=True):
-        """Cuantas veces salio cada seq de datos desde `role` (contando los tirados)."""
+        """Cuantas veces salio cada seq de datos desde `role`
+        (contando los tirados)."""
         cuenta = {}
         for p in self.net.sent(role, incluir_drops=incluir_drops):
             if netsim.es_dato_sack_pkt(p):

@@ -1,4 +1,6 @@
-"""Cancelacion en Selective ACK: lo mismo que test_cancel.py exige a Stop & Wait.
+"""Cancelacion en Selective ACK.
+
+Lo mismo que test_cancel.py exige a Stop & Wait.
 
 - cancel() (el Enter del usuario) corta send()/recv() con TransferCancelled y
   le avisa al otro extremo con ERR+CANCEL.
@@ -16,15 +18,23 @@ import threading
 import time
 import unittest
 
-from base import (ConnectionClosed, Hilo, SACKTestCase, TransferCancelled, bt,
-                  netsim, packet, sack)
+from base import (
+    ConnectionClosed,
+    Hilo,
+    SACKTestCase,
+    TransferCancelled,
+    bt,
+    netsim,
+    packet,
+    sack,
+    )
 
 import lib.server as server_app
 
 PROTO = sack.SelectiveAck.PROTOCOL_ID
 MAX = sack.MAX_PAYLOAD_SIZE
-# Un cancel() se tiene que notar en la proxima vuelta del bucle (POLL_INTERVAL),
-# no al vencer un timeout. Holgura para el scheduler.
+# Un cancel() se tiene que notar en la proxima vuelta del bucle
+# (POLL_INTERVAL), no al vencer un timeout. Holgura para el scheduler.
 REACCION = sack.POLL_INTERVAL + 0.5
 
 
@@ -51,21 +61,33 @@ class TestCancelacionLocal(ConPeer):
         vistos = peer.drain()
         self.assertEqual(len(vistos), bt.ABORT_NOTICES)
         for aviso in vistos:
-            self.assertPaquete(aviso, ERR=1, CANCEL=1, SYN=0, FIN=0, protocol=PROTO,
-                               seq=1000, ack=2000, payload=b"")
+            self.assertPaquete(
+                aviso,
+                ERR=1,
+                CANCEL=1,
+                SYN=0,
+                FIN=0,
+                protocol=PROTO,
+                seq=1000,
+                ack=2000,
+                payload=b"",
+                )
 
     def test_cancelar_durante_send_con_la_ventana_llena(self):
         t, peer = self.transporte_a_mano(seq=1000)
         enviando = Hilo(t.send, b"z" * MAX * 10)
         enviando.start()
-        for _ in range(sack.CWND):          # sale la ventana entera; nadie la ACKea
+        for _ in range(sack.CWND):  # sale la ventana entera; nadie la ACKea
             peer.recv()
 
         inicio = time.monotonic()
         t.cancel()
         with self.assertRaises(TransferCancelled) as cm:
             enviando.resultado_o_error()
-        self.assertLess(time.monotonic() - inicio, REACCION, "no espero el timeout")
+        self.assertLess(
+            time.monotonic() - inicio, REACCION,
+            "no espero el timeout"
+        )
         self.assertIn("cancelada por el usuario", str(cm.exception))
 
         avisos = self.avisos(peer)
@@ -80,15 +102,20 @@ class TestCancelacionLocal(ConPeer):
             t.send(b"z" * MAX * 3)
         vistos = peer.drain()
         self.assertTrue(vistos, "tiene que avisar")
-        self.assertTrue(all(p["ERR"] and p["CANCEL"] for p in vistos),
-                        "solo el aviso, ningun segmento de datos")
+        self.assertTrue(
+            all(p["ERR"] and p["CANCEL"] for p in vistos),
+            "solo el aviso, ningun segmento de datos",
+            )
 
     def test_cancelar_durante_recv(self):
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = Hilo(t.recv)
         recibiendo.start()
         # llega algo, para que la cancelacion sea a mitad de camino
-        self.mandar(peer, t, flags=packet.ACK_MASK, sequence_number=2000, payload=b"abc")
+        self.mandar(
+            peer, t, flags=packet.ACK_MASK, sequence_number=2000,
+            payload=b"abc"
+        )
         peer.recv()
 
         inicio = time.monotonic()
@@ -102,7 +129,10 @@ class TestCancelacionLocal(ConPeer):
         avisos = self.avisos(peer)
         self.assertEqual(len(avisos), bt.ABORT_NOTICES)
         for aviso in avisos:
-            self.assertPaquete(aviso, ERR=1, CANCEL=1, protocol=PROTO, ack=2003)
+            self.assertPaquete(
+                aviso, ERR=1, CANCEL=1, protocol=PROTO,
+                ack=2003
+            )
 
     def test_cancelar_antes_de_recv(self):
         t, peer = self.transporte_a_mano(exp=2000)
@@ -120,7 +150,10 @@ class TestCancelacionRemota(ConPeer):
         recibiendo = Hilo(t.recv)
         recibiendo.start()
         time.sleep(0.02)
-        self.mandar(peer, t, flags=packet.ERR_MASK | packet.CANCEL_MASK, sequence_number=2000)
+        self.mandar(
+            peer, t, flags=packet.ERR_MASK | packet.CANCEL_MASK,
+            sequence_number=2000
+        )
         with self.assertRaises(TransferCancelled) as cm:
             recibiendo.resultado_o_error()
         self.assertIn("otro extremo", str(cm.exception))
@@ -140,7 +173,10 @@ class TestCancelacionRemota(ConPeer):
         enviando = Hilo(t.send, b"z" * 10)
         enviando.start()
         peer.recv()
-        self.mandar(peer, t, flags=packet.ERR_MASK | packet.CANCEL_MASK, sequence_number=1)
+        self.mandar(
+            peer, t, flags=packet.ERR_MASK | packet.CANCEL_MASK,
+            sequence_number=1
+        )
         with self.assertRaises(TransferCancelled) as cm:
             enviando.resultado_o_error()
         self.assertIn("otro extremo", str(cm.exception))
@@ -156,12 +192,17 @@ class TestCancelacionRemota(ConPeer):
         self.assertNotIsInstance(cm.exception, TransferCancelled)
 
     def test_quien_recibe_el_aviso_no_contesta(self):
-        """El que se entera de la cancelacion no le devuelve otro aviso al que cancelo."""
+        """El que se entera de la cancelacion no le devuelve otro aviso al que
+        cancelo.
+        """
         t, peer = self.transporte_a_mano(exp=2000)
         recibiendo = Hilo(t.recv)
         recibiendo.start()
         time.sleep(0.02)
-        self.mandar(peer, t, flags=packet.ERR_MASK | packet.CANCEL_MASK, sequence_number=2000)
+        self.mandar(
+            peer, t, flags=packet.ERR_MASK | packet.CANCEL_MASK,
+            sequence_number=2000
+        )
         with self.assertRaises(TransferCancelled):
             recibiendo.resultado_o_error()
         self.assertEqual(peer.drain(0.1), [])
@@ -211,8 +252,9 @@ class TestCancelacionEntreExtremosReales(SACKTestCase):
         cliente, conexion = self.conectados()
         recibiendo = Hilo(conexion.recv)
         recibiendo.start()
-        # el ultimo segmento nunca llega: la transferencia no puede terminar sola
-        cliente.sock.policy = netsim.drop_seq(1 + 99 * MAX, 10 ** 6)
+        # el ultimo segmento nunca llega: la transferencia no puede
+        # terminar sola
+        cliente.sock.policy = netsim.drop_seq(1 + 99 * MAX, 10**6)
         enviando = Hilo(cliente.send, os.urandom(MAX * 100))
         enviando.start()
 
@@ -226,14 +268,20 @@ class TestCancelacionEntreExtremosReales(SACKTestCase):
 
 
 class TestCierreForzadoEntreExtremos(SACKTestCase):
-    """shutdown() de un lado: el otro se entera por el aviso, no por timeout."""
+    """shutdown() de un lado: el otro se entera por el aviso, no por timeout.
+    """
 
     retries = 100
 
     def test_el_receptor_cierra_y_el_que_manda_se_entera(self):
-        """Es el apagado del servidor: Dispatcher._stop() -> connection.shutdown()."""
+        """Es el apagado del servidor: Dispatcher._stop() ->
+        connection.shutdown().
+        """
         cliente, conexion = self.conectados()
-        cliente.sock.policy = netsim.drop_seq(1 + 9 * MAX, 10 ** 6)   # no termina sola
+        cliente.sock.policy = netsim.drop_seq(
+            1 + 9 * MAX,
+            10**6
+            )  # no termina sola
         enviando = Hilo(cliente.send, b"z" * MAX * 10)
         enviando.start()
         time.sleep(0.05)
@@ -273,6 +321,7 @@ class TestCierreConcurrente(ConPeer):
             if mandados["n"] == 2:
                 t.close()
             return netsim.PASS
+
         t.sock.policy = cerrar_al_segundo
         with self.assertRaises(ConnectionClosed):
             t.send(b"x" * 5000)
@@ -284,16 +333,24 @@ class TestCierreConcurrente(ConPeer):
         recibiendo = Hilo(t.recv)
         recibiendo.start()
         time.sleep(0.02)
-        peer.send_pkt(destino, protocol=PROTO, flags=packet.ACK_MASK, sequence_number=2000, payload=b"hola")
+        peer.send_pkt(
+            destino,
+            protocol=PROTO,
+            flags=packet.ACK_MASK,
+            sequence_number=2000,
+            payload=b"hola",
+            )
         with self.assertRaises(ConnectionClosed):
             recibiendo.resultado_o_error()
 
 
 class SocketQueFallaAlEnviar:
-    """Socket que entrega lo que le den para recibir y falla en cada sendto().
+    """Socket que entrega lo que le den para recibir y falla en cada
+    sendto().
 
-    Si `cerrar` esta, lo llama antes de fallar: asi se simula un close() de otro
-    hilo justo antes del envio, con un socket real (netsim se traga esos errores).
+    Si `cerrar` esta, lo llama antes de fallar: asi se simula un close()
+    de otro hilo justo antes del envio, con un socket real (netsim se
+    traga esos errores).
     """
 
     def __init__(self, recibir=(), cerrar=None):
@@ -315,7 +372,9 @@ class SocketQueFallaAlEnviar:
 
 
 class TestEnvioSobreSocketCerrado(ConPeer):
-    """sendto() falla: si la conexion se cerro es ConnectionClosed; si no, el OSError sigue."""
+    """sendto() falla: si la conexion se cerro es ConnectionClosed; si no, el
+    OSError sigue.
+    """
 
     def marcar_cerrado(self, t):
         return lambda: setattr(t, "is_closed", True)
@@ -336,16 +395,28 @@ class TestEnvioSobreSocketCerrado(ConPeer):
 
     def test_recv_con_la_conexion_cerrada_al_contestar(self):
         t, peer = self.transporte_a_mano(exp=2000)
-        dato = packet.make_packet(version=1, protocol=PROTO, flags=packet.ACK_MASK,
-                                  sequence_number=2000, payload=b"hola")
-        t.sock = SocketQueFallaAlEnviar(recibir=[(dato, peer.addr)], cerrar=self.marcar_cerrado(t))
+        dato = packet.make_packet(
+            version=1,
+            protocol=PROTO,
+            flags=packet.ACK_MASK,
+            sequence_number=2000,
+            payload=b"hola",
+            )
+        t.sock = SocketQueFallaAlEnviar(
+            recibir=[(dato, peer.addr)], cerrar=self.marcar_cerrado(t)
+            )
         with self.assertRaises(ConnectionClosed):
             t.recv()
 
     def test_recv_con_un_error_de_socket_genuino(self):
         t, peer = self.transporte_a_mano(exp=2000)
-        dato = packet.make_packet(version=1, protocol=PROTO, flags=packet.ACK_MASK,
-                                  sequence_number=2000, payload=b"hola")
+        dato = packet.make_packet(
+            version=1,
+            protocol=PROTO,
+            flags=packet.ACK_MASK,
+            sequence_number=2000,
+            payload=b"hola",
+            )
         t.sock = SocketQueFallaAlEnviar(recibir=[(dato, peer.addr)])
         with self.assertRaises(OSError) as cm:
             t.recv()
@@ -353,7 +424,8 @@ class TestEnvioSobreSocketCerrado(ConPeer):
 
 
 class TestCancelacionEnLaAplicacion(SACKTestCase):
-    """De punta a punta con el servidor: un upload cancelado no deja archivo."""
+    """De punta a punta con el servidor: un upload cancelado no deja archivo.
+    """
 
     retries = 100
 
@@ -367,7 +439,9 @@ class TestCancelacionEnLaAplicacion(SACKTestCase):
 
     def test_upload_cancelado_por_el_cliente(self):
         cliente, conexion = self.conectados()
-        atendiendo = Hilo(server_app.handle_connection, conexion, self.dir, threading.Event())
+        atendiendo = Hilo(
+            server_app.handle_connection, conexion, self.dir, threading.Event()
+            )
         atendiendo.start()
 
         datos = os.urandom(MAX * 100)
@@ -378,7 +452,10 @@ class TestCancelacionEnLaAplicacion(SACKTestCase):
         self.assertEqual(respuesta.resultado_o_error(5.0), b"OK")
 
         # el seq arranca en 1 y el pedido ya lo corrio: no termina sola
-        cliente.sock.policy = netsim.drop_seq(1 + len(header) + 99 * MAX, 10 ** 6)
+        cliente.sock.policy = netsim.drop_seq(
+            1 + len(header) + 99 * MAX,
+            10**6
+            )
         enviando = Hilo(cliente.send, datos)
         enviando.start()
         time.sleep(0.1)

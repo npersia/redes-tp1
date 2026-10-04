@@ -44,8 +44,9 @@ class TestRecvCaminoFeliz(ReceptorConPeer):
         self.assertEqual(hilo.resultado_o_error(), b"contenido")
 
         ack, _ = peer.recv(timeout=2.0)
-        self.assertPaquete(ack, ACK=1, SYN=0, FIN=0,
-                           seq=2000, ack=1000 + len(b"contenido"))
+        self.assertPaquete(
+            ack, ACK=1, SYN=0, FIN=0, seq=2000, ack=1000 + len(b"contenido")
+        )
         self.assertEqual(t.exp_sequence_number, 1000 + len(b"contenido"))
 
     def test_reensambla_varios_paquetes_en_orden(self):
@@ -104,14 +105,17 @@ class TestRecvDuplicadosYDesorden(ReceptorConPeer):
         ack1, _ = peer.recv(timeout=2.0)
         self.assertEqual(ack1["ack"], 1004)
 
-        self.datos(peer, destino, 1000, b"hola")      # retransmision del emisor
+        self.datos(peer, destino, 1000, b"hola")  # retransmision del emisor
         ack2, _ = peer.recv(timeout=2.0)
         self.assertEqual(ack2["ack"], 1004, "re-ACK acumulativo, sin avanzar")
 
         self.datos(peer, destino, 1004, b"!", fin=True)
         peer.recv(timeout=2.0)
-        self.assertEqual(hilo.resultado_o_error(), b"hola!",
-                         "el duplicado no se agrego al buffer")
+        self.assertEqual(
+            hilo.resultado_o_error(),
+            b"hola!",
+            "el duplicado no se agrego al buffer"
+        )
 
     def test_un_duplicado_muy_viejo_tambien_se_reackea(self):
         t, peer = self.receptor(exp=1000)
@@ -148,8 +152,11 @@ class TestRecvDuplicadosYDesorden(ReceptorConPeer):
 
         self.datos(peer, destino, 1000, b"ok", fin=True)
         peer.recv(timeout=2.0)
-        self.assertEqual(hilo.resultado_o_error(), b"ok",
-                         "el paquete futuro no quedo en el buffer")
+        self.assertEqual(
+            hilo.resultado_o_error(),
+            b"ok",
+            "el paquete futuro no quedo en el buffer"
+        )
 
     def test_un_paquete_de_otra_direccion_se_ignora(self):
         t, peer = self.receptor(exp=1000)
@@ -173,12 +180,20 @@ class TestRecvDuplicadosYDesorden(ReceptorConPeer):
         hilo.start()
         destino = t.sock.getsockname()
 
-        peer.send_pkt(destino, flags=packet.SYN_MASK | packet.ACK_MASK,
-                      sequence_number=999, ack=2000)
+        peer.send_pkt(
+            destino,
+            flags=packet.SYN_MASK | packet.ACK_MASK,
+            sequence_number=999,
+            ack=2000,
+        )
         ack, _ = peer.recv(timeout=2.0)
         self.assertPaquete(ack, ACK=1, SYN=0, seq=2000, ack=1000)
         self.assertTrue(hilo.is_alive(), "sigue esperando datos")
-        self.assertEqual(t.exp_sequence_number, 1000, "el SYN-ACK no avanza el exp")
+        self.assertEqual(
+            t.exp_sequence_number,
+            1000,
+            "el SYN-ACK no avanza el exp"
+        )
 
         self.datos(peer, destino, 1000, b"datos", fin=True)
         peer.recv(timeout=2.0)
@@ -191,7 +206,12 @@ class TestRecvDuplicadosYDesorden(ReceptorConPeer):
         hilo.start()
         destino = t.sock.getsockname()
 
-        peer.send_pkt(destino, flags=packet.ACK_MASK, sequence_number=7777, ack=2000)
+        peer.send_pkt(
+            destino,
+            flags=packet.ACK_MASK,
+            sequence_number=7777,
+            ack=2000
+        )
         self.assertIsNone(peer.try_recv(0.3)[0], "no genera respuesta")
         self.assertTrue(hilo.is_alive())
 
@@ -206,8 +226,11 @@ class TestRecvErroresYCierre(ReceptorConPeer):
         t, peer = self.receptor(exp=1000)
         hilo = Hilo(t.recv)
         hilo.start()
-        peer.send_pkt(t.sock.getsockname(), flags=packet.ERR_MASK,
-                      sequence_number=1000)
+        peer.send_pkt(
+            t.sock.getsockname(),
+            flags=packet.ERR_MASK,
+            sequence_number=1000
+        )
         with self.assertRaises(ConnectionClosed) as cm:
             hilo.resultado_o_error()
         self.assertIn("ERR", str(cm.exception))
@@ -237,7 +260,8 @@ class TestRecvErroresYCierre(ReceptorConPeer):
             t.recv()
 
     def test_shutdown_desde_otro_hilo_corta_recv(self):
-        """recv() esta bloqueado con timeout, asi que el shutdown si lo saca."""
+        """recv() esta bloqueado con timeout, asi que el shutdown si lo saca.
+        """
         t, peer = self.receptor()
         hilo = Hilo(t.recv)
         hilo.start()
@@ -258,7 +282,10 @@ class TestRecvErroresYCierre(ReceptorConPeer):
         hilo = Hilo(t.recv)
         hilo.start()
         time.sleep(self.timeout * (self.retries + 3))
-        self.assertTrue(hilo.is_alive(), "sigue esperando tras muchos timeouts")
+        self.assertTrue(
+            hilo.is_alive(),
+            "sigue esperando tras muchos timeouts"
+        )
         t.shutdown()
         hilo.esperar(2.0)
 
@@ -292,12 +319,14 @@ class TestRecvErroresYCierre(ReceptorConPeer):
 
         self.datos(peer, destino, 1000, b"final", fin=True)
         self.assertEqual(hilo.resultado_o_error(), b"final")
-        peer.recv(timeout=2.0)                    # el ACK que "se pierde"
+        peer.recv(timeout=2.0)  # el ACK que "se pierde"
 
         # el emisor retransmite el FIN: nadie lo re-ACKea
         self.datos(peer, destino, 1000, b"final", fin=True)
-        self.assertIsNone(peer.try_recv(0.3)[0],
-                          "el FIN retransmitido quedo sin respuesta")
+        self.assertIsNone(
+            peer.try_recv(0.3)[0], "el FIN retransmitido quedo sin respuesta"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

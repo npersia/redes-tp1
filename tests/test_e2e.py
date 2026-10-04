@@ -3,13 +3,19 @@
 import hashlib
 import os
 import random
-import tempfile
 import time
 import unittest
 
 from base import ConnectionClosed, Hilo, SWTestCase, packet, bt, listener, sw
-from netsim import (DROP, PASS, drop_acks_nth, drop_data_nth, dup_nth,
-                    es_ack_de, lossy, salvo)
+from netsim import (
+    DROP,
+    PASS,
+    drop_acks_nth,
+    drop_data_nth,
+    es_ack_de,
+    lossy,
+    salvo,
+    )
 
 MAX = sw.MAX_PAYLOAD_SIZE
 
@@ -32,8 +38,10 @@ class TestTransferencia(SWTestCase):
         self.assertEqual(cliente.sequence_number, conexion.exp_sequence_number)
         self.assertEqual(conexion.sequence_number, cliente.exp_sequence_number)
         self.assertEqual(cliente.remote_address, conexion.sock.getsockname())
-        self.assertEqual(conexion.remote_address[1],
-                         cliente.sock.getsockname()[1])
+        self.assertEqual(
+            conexion.remote_address[1],
+            cliente.sock.getsockname()[1]
+        )
 
     def test_mensaje_de_un_solo_paquete(self):
         recibido, cliente, conexion = self._upload(b"hola servidor")
@@ -53,8 +61,10 @@ class TestTransferencia(SWTestCase):
         datos = os.urandom(MAX * 5 + 123)
         recibido, _, _ = self._upload(datos)
         self.assertEqual(recibido, datos)
-        self.assertEqual(hashlib.sha256(recibido).hexdigest(),
-                         hashlib.sha256(datos).hexdigest())
+        self.assertEqual(
+            hashlib.sha256(recibido).hexdigest(),
+            hashlib.sha256(datos).hexdigest()
+        )
 
     def test_dos_mensajes_seguidos_sobre_la_misma_conexion(self):
         cliente, conexion = self.conectados()
@@ -71,7 +81,10 @@ class TestTransferencia(SWTestCase):
         receptor = Hilo(conexion.recv)
         receptor.start()
         cliente.send(b"DOWNLOAD archivo.txt")
-        self.assertEqual(receptor.resultado_o_error(10.0), b"DOWNLOAD archivo.txt")
+        self.assertEqual(
+            receptor.resultado_o_error(10.0),
+            b"DOWNLOAD archivo.txt"
+        )
 
         respuesta = os.urandom(MAX * 2 + 40)
         receptor2 = Hilo(cliente.recv)
@@ -83,7 +96,10 @@ class TestTransferencia(SWTestCase):
 
     def test_pierde_el_primer_paquete_de_datos(self):
         datos = os.urandom(MAX * 3)
-        recibido, cliente, _ = self._upload(datos, policy_cliente=drop_data_nth(1))
+        recibido, cliente, _ = self._upload(
+            datos,
+            policy_cliente=drop_data_nth(1)
+            )
         self.assertEqual(recibido, datos)
         self.assertGreater(cliente.sock.dropped, 0)
 
@@ -94,13 +110,23 @@ class TestTransferencia(SWTestCase):
 
     def test_pierde_varios_paquetes_de_datos_del_mismo_chunk(self):
         datos = b"critico" * 100
-        recibido, _, _ = self._upload(datos, policy_cliente=drop_data_nth(1, 2, 3))
+        recibido, _, _ = self._upload(
+            datos,
+            policy_cliente=drop_data_nth(1, 2, 3)
+            )
         self.assertEqual(recibido, datos)
 
     def test_pierde_un_ack_intermedio_y_el_receptor_deduplica(self):
         datos = os.urandom(MAX * 3)
-        recibido, _, conexion = self._upload(datos, policy_servidor=drop_acks_nth(2))
-        self.assertEqual(recibido, datos, "el duplicado no contamino el buffer")
+        recibido, _, conexion = self._upload(
+            datos,
+            policy_servidor=drop_acks_nth(2)
+            )
+        self.assertEqual(
+            recibido,
+            datos,
+            "el duplicado no contamino el buffer"
+            )
         self.assertGreater(conexion.sock.dropped, 0)
 
     def test_pierde_el_primer_ack(self):
@@ -119,7 +145,9 @@ class TestTransferencia(SWTestCase):
         self.assertEqual(recibido, datos)
 
     def test_retardo_que_reordena_respecto_de_la_retransmision(self):
-        """Un paquete demorado llega despues de su retransmision: duplicado tardio."""
+        """Un paquete demorado llega despues de su retransmision: duplicado
+        tardio.
+        """
         datos = b"reordenado" * 50
         n = {"i": 0}
 
@@ -144,7 +172,7 @@ class TestPerdidaAleatoria(SWTestCase):
 
     Estas pruebas EXIMEN de la perdida al ACK del ultimo chunk (el del FIN).
     No es una comodidad: es que ese ACK es irrecuperable por diseno (ver
-    TestHallazgosDeProtocolo.test_perder_el_ack_del_fin_...), asi que
+        TestHallazgosDeProtocolo.test_perder_el_ack_del_fin_...), asi que
     dejarlo caer haria fallar ~1 de cada 5 corridas por un motivo que ya
     esta cubierto aparte. Lo que se mide aca es el camino de datos.
 
@@ -174,20 +202,22 @@ class TestPerdidaAleatoria(SWTestCase):
             datos,
             policy_cliente=lossy(0.2, rng),
             policy_servidor=lossy(0.2, rng),
-        )
+            )
         self.assertEqual(recibido, datos)
         self.assertGreater(cliente.sock.dropped + conexion.sock.dropped, 0)
 
     def test_integridad_con_perdida_alta_en_un_archivo_grande(self):
         rng = random.Random(20260927)
-        datos = bytes(rng.getrandbits(8) for _ in range(40_000))   # ~29 chunks
+        datos = bytes(rng.getrandbits(8) for _ in range(40_000))  # ~29 chunks
         recibido, _, _ = self._upload(
             datos,
             policy_cliente=lossy(0.15, rng),
             policy_servidor=lossy(0.15, rng),
+            )
+        self.assertEqual(
+            hashlib.sha256(recibido).hexdigest(),
+            hashlib.sha256(datos).hexdigest()
         )
-        self.assertEqual(hashlib.sha256(recibido).hexdigest(),
-                         hashlib.sha256(datos).hexdigest())
         self.assertEqual(len(recibido), len(datos))
 
     def test_integridad_con_perdida_y_duplicacion_combinadas(self):
@@ -202,13 +232,15 @@ class TestPerdidaAleatoria(SWTestCase):
             return PASS
 
         datos = os.urandom(MAX * 6 + 11)
-        recibido, _, _ = self._upload(datos, policy_cliente=caotica,
-                                      policy_servidor=caotica)
+        recibido, _, _ = self._upload(
+            datos, policy_cliente=caotica, policy_servidor=caotica
+            )
         self.assertEqual(recibido, datos)
 
 
 class TestHallazgosDeProtocolo(SWTestCase):
-    """Defectos que siguen sin arreglar; el test prueba que son reproducibles."""
+    """Defectos que siguen sin arreglar; el test prueba que son reproducibles.
+    """
 
     def test_perder_el_ack_del_fin_hace_fallar_un_upload_exitoso(self):
         """HALLAZGO (sin arreglar): falso negativo al cerrar la transferencia.
@@ -234,11 +266,15 @@ class TestHallazgosDeProtocolo(SWTestCase):
         transcurrido = time.monotonic() - t0
 
         self.assertEqual(
-            receptor.resultado_o_error(5.0), datos,
+            receptor.resultado_o_error(5.0),
+            datos,
             "el servidor SI recibio el archivo completo",
-        )
+            )
         self.assertIn("Connexion lost", str(cm.exception))
-        self.assertGreaterEqual(transcurrido, self.timeout * self.retries * 0.8)
+        self.assertGreaterEqual(
+            transcurrido,
+            self.timeout * self.retries * 0.8
+        )
 
     def test_download_termina_aunque_se_pierda_el_ack_del_pedido(self):
         """Antes era un HALLAZGO: livelock a maxima velocidad, sin timeout.
@@ -251,7 +287,7 @@ class TestHallazgosDeProtocolo(SWTestCase):
         a recv(). Mas casos en test_cambio_de_sentido.py.
         """
         cliente, conexion = self.conectados()
-        conexion.sock.policy = drop_acks_nth(1)      # se pierde el ACK del pedido
+        conexion.sock.policy = drop_acks_nth(1)  # se pierde el ACK del pedido
         archivo = b"contenido del archivo" * 20
 
         def servidor():
@@ -264,16 +300,24 @@ class TestHallazgosDeProtocolo(SWTestCase):
         cliente.send(b"DOWNLOAD archivo.txt")
 
         self.assertEqual(cliente.recv(), archivo)
-        self.assertEqual(hilo_srv.resultado_o_error(5.0), b"DOWNLOAD archivo.txt")
-        self.assertLess(cliente.sock.tx, self.retries * 5, "sin inundar la red")
+        self.assertEqual(
+            hilo_srv.resultado_o_error(5.0),
+            b"DOWNLOAD archivo.txt"
+        )
+        self.assertLess(
+            cliente.sock.tx, self.retries * 5,
+            "sin inundar la red"
+        )
         self.assertLess(conexion.sock.tx, self.retries * 5)
 
     def test_un_syn_tardio_no_confunde_a_una_conexion_ya_establecida(self):
         """El socket efimero ignora los SYN: solo el de escucha los ve."""
         cliente, conexion = self.conectados()
         intruso = self.peer()
-        intruso.send_pkt(conexion.sock.getsockname(), flags=packet.SYN_MASK,
-                         sequence_number=0)
+        intruso.send_pkt(
+            conexion.sock.getsockname(), flags=packet.SYN_MASK,
+            sequence_number=0
+        )
 
         receptor = Hilo(conexion.recv)
         receptor.start()
@@ -292,8 +336,8 @@ class TestCierre(SWTestCase):
         self.assertTrue(sock.closed)
         self.assertIsNone(cliente.sock, "close() suelta la referencia")
 
-        cliente.close()              # no debe explotar
-        cliente.shutdown()           # tampoco, y no puede avisar nada ya
+        cliente.close()  # no debe explotar
+        cliente.shutdown()  # tampoco, y no puede avisar nada ya
 
     def test_close_no_avisa_nada_aunque_shutdown_si(self):
         """La diferencia entre los dos cierres, lado a lado."""
@@ -301,18 +345,23 @@ class TestCierre(SWTestCase):
         sock_close = cliente.sock
         antes = sock_close.tx
         cliente.close()
-        self.assertEqual(sock_close.tx, antes,
-                         "close() es el final normal: no manda avisos")
+        self.assertEqual(
+            sock_close.tx, antes, "close() es el final normal: no manda avisos"
+            )
 
         otro, _ = self.conectados()
         sock_shutdown = otro.sock
         antes = sock_shutdown.tx
         otro.shutdown()
-        self.assertEqual(sock_shutdown.tx, antes + bt.ABORT_NOTICES,
-                         f"shutdown() manda {bt.ABORT_NOTICES} avisos{self.volcado()}")
+        self.assertEqual(
+            sock_shutdown.tx,
+            antes + bt.ABORT_NOTICES,
+            f"shutdown() manda {bt.ABORT_NOTICES} avisos{self.volcado()}",
+            )
 
     def test_shutdown_no_avisa_dos_veces(self):
-        """El mismo transporte pasa por shutdown() y por close() en server.py."""
+        """El mismo transporte pasa por shutdown() y por close() en server.py.
+        """
         cliente, conexion = self.conectados()
         sock = cliente.sock
 
@@ -323,14 +372,20 @@ class TestCierre(SWTestCase):
         self.assertEqual(sock.tx, despues, "el segundo cierre no manda nada")
 
     def test_el_socket_de_escucha_no_le_avisa_a_nadie(self):
-        """Su remote_address apunta a si mismo: un aviso iria contra el propio socket."""
+        """Su remote_address apunta a si mismo: un aviso iria contra el propio
+        socket.
+        """
         servidor = self.servidor()
         self.assertIsInstance(servidor, listener.Listener)
         sock = servidor.sock
         antes = sock.tx
 
         servidor.shutdown()
-        self.assertEqual(sock.tx, antes, "el socket de escucha no manda avisos")
+        self.assertEqual(
+            sock.tx,
+            antes,
+            "el socket de escucha no manda avisos"
+            )
         self.assertTrue(servidor.is_closed)
         self.assertTrue(sock.closed)
 
@@ -351,7 +406,10 @@ class TestCierre(SWTestCase):
         cliente.close()
         time.sleep(0.05)
         self.assertEqual(conexion.sock.tx, antes)
-        self.assertFalse(conexion.is_closed, "el servidor no se entera del cierre")
+        self.assertFalse(
+            conexion.is_closed,
+            "el servidor no se entera del cierre"
+        )
 
     def test_enviar_despues_de_cerrar_falla(self):
         cliente, conexion = self.conectados()

@@ -5,10 +5,13 @@ from lib.protocols.selective_ack.sack_option import covers
 DUP_ACKS_THRESHOLD = 3  # Duplicate ACKs needed before retransmitting.
 
 # What handle_ack() did with an ACK, so the caller can report it.
-NEW_ACK = "new"                  # it moved send_base forward
-STALE_ACK = "stale"              # older than send_base, or nothing in flight: ignored
-DUP_ACK = "duplicate"            # same ACK as before, counted towards the fast retransmit
-FAST_RETRANSMIT = "fast_retransmit"  # it reached the threshold: retransmit the hole
+NEW_ACK = "new"  # it moved send_base forward
+STALE_ACK = "stale"  # older than send_base, or nothing in flight:
+# ignored
+DUP_ACK = "duplicate"  # same ACK as before, counted towards the fast
+# retransmit
+FAST_RETRANSMIT = "fast_retransmit"  # it reached the threshold:
+# retransmit the hole
 
 
 class SentSegment:

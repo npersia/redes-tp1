@@ -13,15 +13,20 @@ VERSION = 1
 TIMEOUT = 1.0
 MAX_RETRIES = 10
 RECV_BUFFER = 2048  # muy por encima del MTU clasico de 1500
-ABORT_NOTICES = 3 #cuantas veces repito el ERR al abortar, porque UDP lo puede perder y nadie lo confirma
+# cuantas veces repito el ERR al abortar, porque UDP lo puede perder
+# y nadie lo confirma
+ABORT_NOTICES = 3
+
 
 class ConnectionClosed(Exception):
-    """El otro extremo cortó la conexión antes de que terminara la transferencia."""
+    """El otro extremo cortó la conexión antes de que terminara
+    la transferencia."""
 
 
 class TransferCancelled(ConnectionClosed):
     """
-    Este extremo abortó la transferencia a pedido del usuario (Enter en la consola).
+    Este extremo abortó la transferencia a pedido del usuario
+    (Enter en la consola).
     """
 
 
@@ -29,17 +34,23 @@ class BaseTransport(ABC):
     """Transporte confiable sobre datagramas.
 
     Concentra el lado cliente del handshake de 3 vias, que es identico para
-    todos los protocolos salvo por el nibble `protocol` del header y el estado
-    que cada uno necesita para transferir. El lado servidor lo hace Listener. Las subclases implementan `send` y `recv`,
-    y `_init_peer` para preparar su propio estado.
+    todos los protocolos salvo por el nibble `protocol` del header y el
+    estado que cada uno necesita para transferir. El lado servidor lo hace
+    Listener. Las subclases implementan `send` y `recv`, y `_init_peer`
+    para preparar su propio estado.
     """
 
     # Nibble `protocol` del header. Lo define cada subclase.
     PROTOCOL_ID = 0
     TAG = "transporte"
 
-    def __init__(self, host: str, port: int, sock: socket.socket = None,
-                 remote_address: tuple = None):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        sock: socket.socket = None,
+        remote_address: tuple = None,
+    ):
         self.host = host
         self.port = int(port)
         self.sock = sock
@@ -51,7 +62,8 @@ class BaseTransport(ABC):
         self.is_closed = True
         self.timeout = TIMEOUT
         self.max_retries = MAX_RETRIES
-        self.cancel_requested = threading.Event() #lo prende cancel() desde otro hilo
+        # lo prende cancel() desde otro hilo
+        self.cancel_requested = threading.Event()
 
     ###########################################################################
     # CANCELACION
@@ -61,7 +73,9 @@ class BaseTransport(ABC):
         """
         Pide abortar la transferencia en curso. Se llama desde otro hilo.
         """
-        logger.debug(f"[{self.TAG}] cancel(): cancelacion pedida desde otro hilo")
+        logger.debug(
+            f"[{self.TAG}] cancel(): cancelacion pedida desde otro hilo"
+        )
         self.cancel_requested.set()
 
     def is_cancelled(self) -> bool:
@@ -69,30 +83,36 @@ class BaseTransport(ABC):
 
     def notify_abort(self) -> None:
         """
-        Le avisa al otro extremo que cortamos, para que no quede esperando para siempre.
+        Le avisa al otro extremo que cortamos, para que no quede
+        esperando para siempre.
 
         Van los dos bits prendidos, ERR y CANCEL:
-        - ERR: le avisa al otro extremo que hubo un error y que no espere mas.
+        - ERR: le avisa al otro extremo que hubo un error y que no
+          espere mas.
         - CANCEL: le avisa al otro extremo que el error fue deliberado.
         """
         if self.sock is None or self.remote_address is None:
-            return #sin peer el aviso iria a la nada
+            return  # sin peer el aviso iria a la nada
 
         err_packet = packet.make_packet(
             version=VERSION,
             protocol=self.PROTOCOL_ID,
             flags=packet.ERR_MASK | packet.CANCEL_MASK,
             sequence_number=self.sequence_number,
-            ack=self.exp_sequence_number
+            ack=self.exp_sequence_number,
         )
 
-        logger.debug(f"[{self.TAG}] aviso la cancelacion a {self.remote_address} con "
-                     f"{ABORT_NOTICES} paquetes de aborto (flags ERR+CANCEL)")
+        logger.debug(
+            f"[{self.TAG}] aviso la cancelacion a {self.remote_address} con "
+            f"{ABORT_NOTICES} paquetes de aborto (flags ERR+CANCEL)"
+        )
         for _ in range(ABORT_NOTICES):
             try:
                 self.sock.sendto(err_packet, self.remote_address)
             except OSError as error:
-                logger.debug(f"[{self.TAG}] no se pudo avisar el aborto: {error}")
+                logger.debug(
+                    f"[{self.TAG}] no se pudo avisar el aborto: {error}"
+                )
                 return
 
     ###########################################################################
@@ -107,22 +127,26 @@ class BaseTransport(ABC):
 
         client_isn = self.sequence_number
 
-        trace = ConnectTrace(self.TAG, (self.host, self.port), client_isn,
-                             self.timeout, self.max_retries)
+        trace = ConnectTrace(
+            self.TAG, (self.host, self.port), client_isn,
+            self.timeout, self.max_retries
+        )
 
         # SYN=1, seq = client_isn
         syn_packet = packet.make_packet(
             version=VERSION,
             protocol=self.PROTOCOL_ID,
             flags=packet.SYN_MASK,
-            sequence_number=client_isn
+            sequence_number=client_isn,
         )
 
         retries = 0
         while retries < self.max_retries:
             if self.cancel_requested.is_set():
                 trace.cancelled()
-                raise TransferCancelled("Conexion cancelada por el usuario durante el handshake.")
+                raise TransferCancelled(
+                    "Conexion cancelada por el usuario durante el handshake."
+                )
             try:
                 self.sock.sendto(syn_packet, (self.host, self.port))
                 data, server_address = self.sock.recvfrom(RECV_BUFFER)
@@ -143,15 +167,19 @@ class BaseTransport(ABC):
                         ack_packet = packet.make_packet(
                             version=VERSION,
                             protocol=self.PROTOCOL_ID,
-                            flags=packet.ACK_MASK,  # la variable ya tiene el SYN = 0
+                            # la variable ya tiene el SYN = 0
+                            flags=packet.ACK_MASK,
                             sequence_number=client_isn + 1,
-                            ack=server_isn + 1
+                            ack=server_isn + 1,
                         )
 
                         self.sock.sendto(ack_packet, self.remote_address)
                         self._init_peer(client_isn + 1, server_isn + 1)
-                        trace.established(self.remote_address, self.sequence_number,
-                                          self.exp_sequence_number)
+                        trace.established(
+                            self.remote_address,
+                            self.sequence_number,
+                            self.exp_sequence_number,
+                        )
                         return
                     trace.bad_syn_ack(packet.get_header_ack(data))
             except socket.timeout:
@@ -160,15 +188,16 @@ class BaseTransport(ABC):
 
         trace.failed()
         raise ConnectionClosed(
-            f"Timeout: can't connect to {self.host}:{self.port}.")
+            f"Timeout: can't connect to {self.host}:{self.port}."
+        )
 
     def _init_peer(self, sequence_number, exp_sequence_number) -> None:
         """Pone la sesion en estado de poder enviar y recibir datos.
 
-        El handshake ya esta hecho: aca cada protocolo arma el estado extra que
-        necesita encima de los numeros de secuencia. Lo minimo que todos
-        necesitan son los numeros y marcar la conexion abierta; el que tenga
-        algo mas (SACK con su ventana) lo sobreescribe.
+        El handshake ya esta hecho: aca cada protocolo arma el estado
+        extra que necesita encima de los numeros de secuencia. Lo minimo
+        que todos necesitan son los numeros y marcar la conexion abierta;
+        el que tenga algo mas (SACK con su ventana) lo sobreescribe.
         """
         self.sequence_number = sequence_number
         self.exp_sequence_number = exp_sequence_number
@@ -180,8 +209,8 @@ class BaseTransport(ABC):
 
     @abstractmethod
     def send(self, data: bytes) -> None:
-        """Recibe un buffer de cualquier tamaño,
-        cliente y servidor no tienen idea de como el protocolo maneja el particionado"""
+        """Recibe un buffer de cualquier tamaño, cliente y servidor no
+        tienen idea de como el protocolo maneja el particionado"""
         pass
 
     @abstractmethod
@@ -199,10 +228,12 @@ class BaseTransport(ABC):
         """
         if self.sock is None:
             self.is_closed = True
-            return #ya se solto el socket: no repito el aviso ni el cierre
+            return  # ya se solto el socket: no repito el aviso ni el cierre
 
         self.notify_abort()
-        logger.debug(f"[{self.TAG}] shutdown(): avise el corte a {self.remote_address}")
+        logger.debug(
+            f"[{self.TAG}] shutdown(): avise el corte a {self.remote_address}"
+        )
         self.close()
 
     def close(self) -> None:
@@ -217,8 +248,13 @@ class BaseTransport(ABC):
         if sock is None:
             return
 
-        logger.debug(f"[{self.TAG}] close(): cierro el socket local de {self.remote_address}")
+        logger.debug(
+            f"[{self.TAG}] close(): cierro el socket local de "
+            f"{self.remote_address}"
+        )
         try:
             sock.close()
         except Exception as error:
-            logger.debug(f"[{self.TAG}] close(): el socket ya venia mal ({error})")
+            logger.debug(
+                f"[{self.TAG}] close(): el socket ya venia mal ({error})"
+            )
