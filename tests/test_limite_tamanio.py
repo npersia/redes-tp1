@@ -39,7 +39,7 @@ import lib.file_transfer.file_transfer as ft
 import lib.server as server_app
 from lib.logger.logger import logger
 
-DOS_GB = 2 * 1024**3
+UN_GB = 1 * 1024**3
 
 
 def args(**kwargs):
@@ -123,9 +123,9 @@ class TestMensajeDeUpload(unittest.TestCase):
     def test_parse_acepta_tamanios_grandes(self):
         self.assertEqual(
             ft.parse_upload_request(
-                f"UPLOAD {DOS_GB + 1} a".encode()
+                f"UPLOAD {UN_GB + 1} a".encode()
             ).size,
-            DOS_GB + 1
+            UN_GB + 1
         )
 
     def test_parse_rechaza_mensajes_mal_formados(self):
@@ -146,7 +146,7 @@ class TestMensajeDeUpload(unittest.TestCase):
 class TestConstante(unittest.TestCase):
 
     def test_el_limite_del_servidor_es_2_gb(self):
-        self.assertEqual(server_app.MAX_FILE_SIZE, DOS_GB)
+        self.assertEqual(server_app.MAX_FILE_SIZE, UN_GB)
 
 
 # ---------------------------------------------------------------------------
@@ -365,7 +365,7 @@ class _LimiteBase:
     def test_el_servidor_rechaza_mas_de_2_gb_con_la_constante_real(self):
         cliente, servidor = self._atendido_a_mano()
 
-        cliente.send(f"UPLOAD {DOS_GB + 1} enorme.bin".encode())
+        cliente.send(f"UPLOAD {UN_GB + 1} enorme.bin".encode())
         respuesta = self._recv(cliente)
         servidor.resultado_o_error(5.0)
 
@@ -374,7 +374,7 @@ class _LimiteBase:
 
     def test_el_servidor_acepta_exactamente_2_gb(self):
         cliente, _ = self._atendido_a_mano()
-        cliente.send(f"UPLOAD {DOS_GB} justo.bin".encode())
+        cliente.send(f"UPLOAD {UN_GB} justo.bin".encode())
         # no mandamos 2 GB: alcanza con ver que lo acepta
         self.assertEqual(self._recv(cliente), b"OK")
 
