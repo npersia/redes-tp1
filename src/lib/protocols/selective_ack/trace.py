@@ -1,8 +1,9 @@
-"""Los mensajes de -v de Selective ACK, con todas sus cuentas.
+"""Selective ACK -v messages, including all related calculations.
 
-send() y recv() solo llaman metodos de aca. A diferencia de Stop & Wait hay
-varios segmentos en vuelo, asi que el avance se mide por los bytes que el
-otro extremo ya confirmo (send_base) y no por el paquete que se esta mandando.
+send() and recv() only call methods from this module. Unlike Stop & Wait,
+multiple segments can be in flight, so progress is measured by the bytes
+already acknowledged by the other end (send_base), rather than by the
+segment currently being transmitted.
 """
 
 from lib.logger.trace import MB, Trace
@@ -61,11 +62,9 @@ class SackSendTrace(Trace):
                 f"{ack_sender.DUP_ACKS_THRESHOLD} para el fast "
                 f"retransmit); SACK {blocks}"
             )
-        # FAST_RETRANSMIT lo cuenta retransmit(), que es donde se reenvia
 
     def _progress(self, send_base, blocks):
         """Actualiza lo confirmado y, cada tanto, imprime el avance."""
-        # el FIN de un archivo vacio ocupa 1 de seq sin ser un byte de datos
         self.bytes = min(send_base - self.first_seq, self.total_bytes)
         if not self.due():
             return
@@ -144,10 +143,10 @@ class SackRecvTrace(Trace):
     def __init__(self, remote, expected_seq, rwind):
         super().__init__(TAG)
         self.remote = remote
-        self.buffered = 0  # llegaron adelantados y esperaron en el buffer
+        self.buffered = 0 # Arrived out of order and were buffered
         self.duplicates = 0
         self.out_of_window = (
-            0  # se descartaron por caer mas alla de la ventana
+            0  # Discarded because they fell outside the window
         )
         self.log(
             f"recv: esperando datos de {remote} (seq esperado "

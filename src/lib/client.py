@@ -27,36 +27,31 @@ def create_transport(arguments):
         arguments.port,
     )
 
-
-# cada cuanto el vigilante se despierta a mirar si la transferencia ya termino
 POLL_INTERVAL = 0.2
 
 
 def watch_for_enter(transport, finished):
     """
-    Arranca el hilo que espera un Enter para abortar la transferencia en curso.
+    Starts the thread that waits for Enter to abort the current transfer.
     """
 
     def wait_for_enter():
         if sys.stdin is None or sys.stdin.closed:
-            return  # sin consola no hay nada que vigilar
+            return  
 
         while not finished.is_set():
             try:
                 listo, _, _ = select.select([sys.stdin], [], [], POLL_INTERVAL)
             except (OSError, ValueError):
-                # stdin no es seleccionable (cerrado o redirigido a algo raro)
                 return
 
             if not listo:
                 continue
 
             if sys.stdin.readline() == "":
-                # EOF: stdin no es una consola, no va a llegar ningun Enter
                 return
 
             if finished.is_set():
-                # la transferencia ya habia terminado, el Enter llego tarde
                 return
 
             logger.info("[Cliente] Cancelando la transferencia...")

@@ -1,16 +1,16 @@
-"""Los mensajes de -v del handshake de 3 vias, de los dos lados.
+"""Verbose messages for the three-way handshake, on both sides.
 
-Listener.accept() usa ListenTrace y AcceptTrace; BaseTransport.connect() usa
-ConnectTrace. Como el handshake son tres paquetes no hay progreso ni tasas:
-lo que aporta el reloj es cuanto tardo en establecerse la conexion.
+Listener.accept() uses ListenTrace and AcceptTrace; BaseTransport.connect()
+uses ConnectTrace. Since the handshake consists of three packets, there is
+no progress or rate tracking: the timer only measures how long it takes to
+establish the connection.
 """
 
 from lib.logger.trace import Trace
 
 
 class ListenTrace(Trace):
-    """Narra el socket de escucha: lo que llega antes de arrancar
-    un handshake."""
+    """Describes the listening socket: what arrives before a handshake starts."""
 
     def invalid(self, addr):
         self.log(f"accept: datagrama invalido de {addr}, lo descarto")
@@ -41,7 +41,7 @@ class ListenTrace(Trace):
 
 
 class AcceptTrace(Trace):
-    """Narra el handshake del lado servidor con un cliente puntual."""
+    """Describes the server-side handshake with a specific client."""
 
     def __init__(self, tag, client, ephemeral, server_isn, tope):
         super().__init__(tag)
@@ -81,7 +81,7 @@ class AcceptTrace(Trace):
 
 
 class ConnectTrace(Trace):
-    """Narra el handshake del lado cliente."""
+    """Describes the client-side handshake."""
 
     def __init__(self, tag, server, client_isn, timeout, tope):
         super().__init__(tag)

@@ -14,14 +14,11 @@ from lib.logger.logger import logger
 
 MB = 1024 * 1024
 PROGRESS_INTERVAL = (
-    1.0  # segundos minimos entre dos logs de progreso, para
-         # no inundar la salida
+    1.0  
 )
 
 
 class Trace:
-    """Parte comun: el prefijo, el reloj, los bytes acumulados y
-    el limitador de progreso."""
 
     def __init__(self, tag):
         self.tag = tag
@@ -43,7 +40,6 @@ class Trace:
         return self.bytes / elapsed / MB if elapsed > 0 else 0.0
 
     def due(self):
-        """True si ya paso PROGRESS_INTERVAL desde el ultimo log de avance."""
         now = time.monotonic()
         if now - self.last_log < PROGRESS_INTERVAL:
             return False

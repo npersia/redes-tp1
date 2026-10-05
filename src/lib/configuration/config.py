@@ -7,12 +7,6 @@ BASE_DIR = os.path.dirname(
     )
 )
 
-
-# version con env
-#  ahora lo que hace es tomar todas
-#  las variables del archivo .env y cargarlas
-
-
 def load_config(filename):
     config_filepath = os.path.join(BASE_DIR, filename)
     config = {}

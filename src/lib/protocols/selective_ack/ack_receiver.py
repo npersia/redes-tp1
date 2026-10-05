@@ -1,25 +1,18 @@
 from lib.protocols.selective_ack.sack_option import add_block, discard_below
 
-# What accept() did with a segment, so the caller can report it.
 DELIVERED = (
-    "delivered"  # it was the next one: its bytes (and maybe
-    # more) were delivered
+    "delivered"  
 )
-BUFFERED = "buffered"  # it came ahead of a hole: kept until the
-# hole is filled
-DUPLICATE = "duplicate"  # we already had it, delivered or buffered
-OUT_OF_WINDOW = "out_of_window"  # too far ahead for the receive
-# window: dropped
+BUFFERED = "buffered"  
+DUPLICATE = "duplicate"  
+OUT_OF_WINDOW = "out_of_window" 
 
 
 class ACKReceiver:
 
     def __init__(self, initial_seq, rwind):
-        # rcv_next is the next sequence number we expect, and also what goes
-        # in the ack field of the ACK we send.
         self.rcv_next = initial_seq
         self.rwind = rwind
-        # seq -> (n_bytes, payload) of the out-of-order segments.
         self.out_of_order = {}
 
     def _is_duplicate(self, seq, n_bytes):

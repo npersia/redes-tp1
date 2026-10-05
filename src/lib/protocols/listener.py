@@ -9,11 +9,12 @@ import lib.protocols.packet.packet as packet
 
 
 class Listener:
-    """Socket de escucha del servidor.
+    """Server listening socket.
 
-    No tiene protocolo propio: espera SYNs y cada cliente elige el suyo en el
-    header. Por cada SYN completa el handshake de 3 vias desde un socket
-    y devuelve la conexion armada con la clase de ese protocolo.
+    It does not have its own protocol: it waits for SYNs, and each client
+    selects its protocol in the header. For each SYN, it completes the
+    three-way handshake from a socket and returns the established connection
+    using the class for that protocol.
     """
 
     TAG = "listener"
@@ -23,32 +24,24 @@ class Listener:
         self.port = int(port)
         self.sock = None
         self.is_closed = True
-        # Distingue "nunca escucho" de "ya se cerro": en los dos sock es None.
         self.started = False
-        # se leen del modulo al crear el listener, igual que en BaseTransport
         self.timeout = base_transport.TIMEOUT
         self.max_retries = base_transport.MAX_RETRIES
         self.trace = ListenTrace(self.TAG)
 
     def start_server(self) -> None:
-        """Abre el socket de escucha y lo deja listo para aceptar
-        conexiones."""
+        """Opens the listening socket and prepares it to accept connections."""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
-        # sin esto accept() bloquea para siempre y el servidor no se puede
-        # apagar
         self.sock.settimeout(self.timeout)
         self.is_closed = False
         self.started = True
 
     def accept(self) -> base_transport.BaseTransport:
-        """Espera el SYN de un cliente y devuelve la conexion ya
-        establecida."""
+        """Waits for a client's SYN and returns the established connection."""
         if not self.started:
             raise RuntimeError("No server initialized.")
 
-        # Se toma una sola vez: un close() de otro hilo deja self.sock en None,
-        # y este queda cerrado (recvfrom da OSError -> ConnectionClosed).
         sock = self.sock
 
         while not self.is_closed:
@@ -62,8 +55,6 @@ class Listener:
                 if packet.get_flag_SYN(flags):
                     client_isn = packet.get_header_sequence_paquet(data)
                     protocol_id = packet.get_header_protocol(data)
-                    # va antes que el protocolo: con otra version ese nibble
-                    # puede significar otra cosa
                     version = packet.get_header_version(data)
                     if version != VERSION:
                         self.trace.bad_version(client_address, version)
@@ -82,7 +73,7 @@ class Listener:
                     if peer is not None:
                         return peer
             except socket.timeout:
-                return None  # todavía no llego nada
+                return None  
             except Exception as e:
                 if self.is_closed:
                     self.trace.closed()
@@ -94,11 +85,9 @@ class Listener:
 
     @staticmethod
     def _transport_for(protocol_id):
-        """La clase que atiende la conexion, segun el protocolo que pide
-        el SYN.
-
-        Solo sirven las clases que usan este handshake, que son las que
-        declaran ese PROTOCOL_ID en el header (TCP no lo declara).
+        """Connection handler class, based on the protocol requested by the SYN.
+        Only classes that use this handshake are supported: they declare the
+        corresponding PROTOCOL_ID in the header (TCP does not).
         """
         peer_class = TransportFactory.get_class_by_id(protocol_id)
         if peer_class is None or peer_class.PROTOCOL_ID != protocol_id:
@@ -107,11 +96,11 @@ class Listener:
 
     @staticmethod
     def _reject_version(sock, client_address, client_isn, protocol_id):
-        """Le avisa al cliente con un ERR que su version no es la nuestra.
-
-        Sale del socket de escucha: no hay conexion, asi que no se abre
-        socket efimero. Lleva nuestra VERSION, que es como el cliente se
-        entera de que no coinciden, y su connect() corta sin reintentar.
+        """Notifies the client with an ERR that its version does not match ours.
+        It is sent from the listening socket: there is no connection, so no
+        ephemeral socket is opened. It includes our VERSION, which allows the
+        client to detect the mismatch, and its connect() terminates without
+        retrying.
         """
         err_packet = packet.make_packet(
             version=VERSION,
@@ -122,24 +111,20 @@ class Listener:
         sock.sendto(err_packet, client_address)
 
     def _accept_syn(self, client_address, client_isn, peer_class):
-        """Completa el handshake de un SYN ya leido de la red.
-
-        Va aparte de accept() para no tener que releer el SYN. Devuelve None si
-        el cliente no completo el handshake, y accept() sigue esperando.
+        """Completes the handshake for a SYN already read from the network.
+        Kept separate from accept() so the SYN does not have to be read again.
+        Returns None if the client does not complete the handshake, and accept()
+        continues waiting.
         """
-        # aca creo un socket efimero para la comunicacion
         client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # el 0 hace que el SO asigne un puerto libre
         client_sock.bind((self.host, 0))
-        # algun timeout hay que poner para que no se quede esperando
-        # por siempre, tambien para poder mandar de nuevo
         client_sock.settimeout(self.timeout)
 
         # TODO podria o deberia ser random, pero lo dejo en 0 para que sea
         # mas facil
         server_isn = 0
 
-        # respondo con SYN=1, ACK=1, seq = server_isn, ack = client_isn+1
+       # Respond with SYN=1, ACK=1, seq=server_isn, ack=client_isn+1
         syn_packet = packet.make_packet(
             version=VERSION,
             protocol=peer_class.PROTOCOL_ID,
@@ -160,7 +145,7 @@ class Listener:
         while retries < self.max_retries:
             client_sock.sendto(syn_packet, client_address)
             try:
-                # espero ACK del cliente y SYN=0
+                # Wait for the client's ACK with SYN=0
                 resp, addr = client_sock.recvfrom(RECV_BUFFER)
                 if addr != client_address or not packet.is_valid(resp):
                     trace.stray(addr)
@@ -191,8 +176,8 @@ class Listener:
 
     def shutdown(self) -> None:
         """
-        Deja de escuchar. No hay peer al que avisarle: las conexiones ya
-        aceptadas tienen su propio socket y se cortan por separado.
+        Stops listening. There is no peer to notify: already accepted connections
+        have their own sockets and are closed separately.
         """
         self.close()
 

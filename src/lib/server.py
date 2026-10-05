@@ -17,7 +17,7 @@ from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.listener import Listener
 
-# Tamanio maximo de archivo que el servidor acepta en un upload.
+# Maximum file size accepted by the server for uploads.
 MAX_FILE_SIZE = 1 * 1024**3
 
 
@@ -86,7 +86,6 @@ class Dispatcher:
             f"transferencia(s) en curso a abortar"
         )
         for thread in active_threads:
-            # avisa ERR+CANCEL y recien despues cierra
             thread.connection.shutdown()
 
         for thread in active_threads:
