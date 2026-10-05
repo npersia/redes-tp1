@@ -10,7 +10,7 @@ from lib.protocols.handshake_trace import ConnectTrace
 # Valores por defecto del handshake. Los protocols sobre UDP los heredan tal
 # cual; TCP los ignora porque no usa este handshake.
 VERSION = 1
-TIMEOUT = 1.0
+TIMEOUT = 0.10
 MAX_RETRIES = 10
 RECV_BUFFER = 2048  # muy por encima del MTU clasico de 1500
 # cuantas veces repito el ERR al abortar, porque UDP lo puede perder
