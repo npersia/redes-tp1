@@ -227,7 +227,7 @@ class BaseTransport(ABC):
 
     def shutdown(self) -> None:
         """
-        Aborta: le avisa al otro extremo y corta lo que este bloqueado.
+        Aborts the transfer: notifies the peer and terminates whatever is blocked.
         """
         if self.sock is None:
             self.is_closed = True

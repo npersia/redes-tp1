@@ -1,10 +1,10 @@
-"""Base de los logs de -v.
+"""Base class for -v logs.
 
-Cada protocolo tiene sus propios logs (por ejemplo
-stop_and_wait/trace.py): el codigo del protocolo solo llama metodos con nombre
-y los textos, contadores y tasas viven en el log. Aca esta lo que todos
-comparten: el prefijo, el reloj, los bytes acumulados y el limitador de
-progreso. No sabe nada de protocolos.
+Each protocol has its own logs (for example, stop_and_wait/trace.py):
+protocol code only calls named methods, while messages, counters, and rates
+are handled by the log. This module contains the shared functionality:
+the prefix, timer, accumulated bytes, and progress limiter. It is
+protocol-agnostic.
 """
 
 import time
