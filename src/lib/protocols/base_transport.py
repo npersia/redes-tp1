@@ -8,7 +8,7 @@ from lib.protocols.handshake_trace import ConnectTrace
 
 
 VERSION = 1
-TIMEOUT = 1.0
+TIMEOUT = 0.15
 MAX_RETRIES = 10
 RECV_BUFFER = 2048  
 ABORT_NOTICES = 3
