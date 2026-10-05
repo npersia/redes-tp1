@@ -152,8 +152,6 @@ def get_header_options(packet: bytes) -> bytes:
         return packet[HEADER_SIZE:hlen]
     return b""  # No options
 
-    # TODO: definir una variable en lugar de 12
-
 
 def get_header_sequence_paquet(packet: bytes) -> int:
     """Get the sequence paquet of the RDT protocol from the packet header."""

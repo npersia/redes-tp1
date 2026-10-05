@@ -120,8 +120,6 @@ class Listener:
         client_sock.bind((self.host, 0))
         client_sock.settimeout(self.timeout)
 
-        # TODO podria o deberia ser random, pero lo dejo en 0 para que sea
-        # mas facil
         server_isn = 0
 
        # Respond with SYN=1, ACK=1, seq=server_isn, ack=client_isn+1

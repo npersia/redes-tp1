@@ -65,8 +65,8 @@ class BaseTransport(ABC):
         self.sock = sock
         self.remote_address = remote_address or (host, port)
 
-        self.sequence_number = 0  # TODO deberia ser un random
-        self.exp_sequence_number = 0  # TODO deberia ser un random
+        self.sequence_number = 0  
+        self.exp_sequence_number = 0  
         self.is_closed = True
         self.timeout = TIMEOUT
         self.max_retries = MAX_RETRIES
