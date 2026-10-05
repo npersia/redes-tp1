@@ -1,7 +1,7 @@
-"""Los mensajes de -v de Stop & Wait, con todas sus cuentas.
+"""Stop & Wait -v messages, including all related calculations.
 
-send() y recv() solo llaman metodos de aca. Los porcentajes, las tasas, los
-contadores y el armado de los textos viven en este modulo.
+send() and recv() only call methods from this module. Percentages, rates,
+counters, and message formatting are handled here.
 """
 
 from lib.logger.trace import MB, Trace
@@ -12,7 +12,7 @@ TAG = "SW"
 
 
 class SendTrace(Trace):
-    """Narra un send(). `position` es el paquete que se esta mandando ahora."""
+    """Describes a send() operation. `position` is the packet currently being sent."""
 
     def __init__(
         self, total_bytes, total_packets, payload_size, remote, first_seq
@@ -100,9 +100,7 @@ class SendTrace(Trace):
         self.log(f"cancelado por el usuario {donde} {self.position}")
 
     def acked(self, payload_len):
-        """Un paquete confirmado. Suma al total y, cada tanto, imprime
-        el avance.
-        """
+        """Acknowledged packet. Adds to the total and periodically prints progress."""
         self.packets += 1
         self.bytes += payload_len
         if not self.due():
@@ -129,15 +127,14 @@ class SendTrace(Trace):
 
 
 class RecvTrace(Trace):
-    """Narra un recv(). No sabe cuanto va a recibir, asi que no hay
-    porcentaje.
+    """Describes a recv() operation. The amount to be received is unknown,
+    so there is no percentage.
     """
 
     def __init__(self, remote, expected_seq, timeout):
         super().__init__(TAG)
         self.remote = remote
         self.duplicates = 0
-        # timeouts seguidos sin recibir nada del otro extremo
         self.idle_timeouts = 0
         self.log(
             f"recv: esperando datos de {remote} "
@@ -193,9 +190,7 @@ class RecvTrace(Trace):
         )
 
     def stored(self, payload_len):
-        """Un paquete aceptado en orden. Suma al total y, cada tanto,
-        imprime el avance.
-        """
+        """In-order packet. Adds to the total and periodically prints progress."""
         self.packets += 1
         self.bytes += payload_len
         self.idle_timeouts = 0

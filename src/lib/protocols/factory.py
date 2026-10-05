@@ -39,6 +39,6 @@ class TransportFactory:
 
     @classmethod
     def get_class_by_id(cls, protocol_id: int):
-        """La clase del protocolo que pide el header, o None si no hay
-        ninguna."""
+        """Returns the protocol class requested by the header,
+          or None if there is no match."""
         return cls._PROTOCOLS_BY_ID.get(protocol_id)

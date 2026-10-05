@@ -1,10 +1,10 @@
-"""Base de los logs de -v.
+"""Base class for -v logs.
 
-Cada protocolo tiene sus propios logs (por ejemplo
-stop_and_wait/trace.py): el codigo del protocolo solo llama metodos con nombre
-y los textos, contadores y tasas viven en el log. Aca esta lo que todos
-comparten: el prefijo, el reloj, los bytes acumulados y el limitador de
-progreso. No sabe nada de protocolos.
+Each protocol has its own logs (for example, stop_and_wait/trace.py):
+protocol code only calls named methods, while messages, counters, and rates
+are handled by the log. This module contains the shared functionality:
+the prefix, timer, accumulated bytes, and progress limiter. It is
+protocol-agnostic.
 """
 
 import time
@@ -14,14 +14,11 @@ from lib.logger.logger import logger
 
 MB = 1024 * 1024
 PROGRESS_INTERVAL = (
-    1.0  # segundos minimos entre dos logs de progreso, para
-         # no inundar la salida
+    1.0  
 )
 
 
 class Trace:
-    """Parte comun: el prefijo, el reloj, los bytes acumulados y
-    el limitador de progreso."""
 
     def __init__(self, tag):
         self.tag = tag
@@ -43,7 +40,6 @@ class Trace:
         return self.bytes / elapsed / MB if elapsed > 0 else 0.0
 
     def due(self):
-        """True si ya paso PROGRESS_INTERVAL desde el ultimo log de avance."""
         now = time.monotonic()
         if now - self.last_log < PROGRESS_INTERVAL:
             return False

@@ -15,11 +15,11 @@ class UploadRequest(NamedTuple):
 
 
 class InvalidMessage(Exception):
-    """El mensaje recibido no respeta el formato esperado."""
+    """The received message does not follow the expected format."""
 
 
 class UploadRejected(Exception):
-    """El servidor no acepto el upload; el mensaje es el motivo que mando."""
+   """The server rejected the upload; the message contains the reason provided."""
 
 
 def read_file(filepath):
@@ -84,9 +84,8 @@ def receive_file(transport, filepath):
 
 
 def request_upload(transport, filename, size):
-    """Pide subir el archivo: 'UPLOAD <tamanio> <nombre>'.
-
-    Retorna si el servidor contesta OK; si no, levanta UploadRejected.
+    """Requests a file upload: 'UPLOAD <size> <name>'.
+    Returns whether the server responds with OK; otherwise, raises UploadRejected.
     """
     logger.debug(f"[archivo] pidiendo subir '{filename}' ({size} bytes)")
     transport.send(UPLOAD_PREFIX + f"{size} {filename}".encode("utf-8"))
@@ -105,7 +104,7 @@ def is_upload_request(content):
 
 
 def parse_upload_request(content):
-    """'UPLOAD <tamanio> <nombre>' -> UploadRequest; si no, InvalidMessage."""
+    """'UPLOAD <size> <name>' -> UploadRequest; otherwise, InvalidMessage."""
     try:
         size_text, filename = (
             content[len(UPLOAD_PREFIX):].decode("utf-8").split(" ", 1)

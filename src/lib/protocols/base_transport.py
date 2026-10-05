@@ -7,33 +7,29 @@ import lib.protocols.packet.packet as packet
 from lib.protocols.handshake_trace import ConnectTrace
 
 
-# Valores por defecto del handshake. Los protocols sobre UDP los heredan tal
-# cual; TCP los ignora porque no usa este handshake.
 VERSION = 1
 TIMEOUT = 1.0
 MAX_RETRIES = 10
-RECV_BUFFER = 2048  # muy por encima del MTU clasico de 1500
-# cuantas veces repito el ERR al abortar, porque UDP lo puede perder
-# y nadie lo confirma
+RECV_BUFFER = 2048  
 ABORT_NOTICES = 3
 
 
 class ConnectionClosed(Exception):
-    """El otro extremo cortó la conexión antes de que terminara
-    la transferencia."""
+    """The peer closed the connection before the transfer was completed."""
 
 
 class TransferCancelled(ConnectionClosed):
     """
-    Este extremo abortó la transferencia a pedido del usuario
-    (Enter en la consola).
+    This end aborted the transfer at the user's request
+    (Enter pressed in the console).
     """
 
 
 class UnsupportedVersion(ConnectionClosed):
-    """El otro extremo habla otra version del protocolo. Se detecta en el
-    handshake: del lado cliente por la respuesta al SYN, del lado servidor
-    por el SYN (el Listener lo rechaza con un ERR)."""
+    """The peer uses a different protocol version. It is detected during the
+    handshake: on the client side, from the response to the SYN; on the server
+    side, from the SYN (the Listener rejects it with an ERR).
+    """
 
     def __init__(self, received, expected):
         super().__init__(
@@ -45,16 +41,15 @@ class UnsupportedVersion(ConnectionClosed):
 
 
 class BaseTransport(ABC):
-    """Transporte confiable sobre datagramas.
+    """Reliable transport over datagrams.
 
-    Concentra el lado cliente del handshake de 3 vias, que es identico para
-    todos los protocolos salvo por el nibble `protocol` del header y el
-    estado que cada uno necesita para transferir. El lado servidor lo hace
-    Listener. Las subclases implementan `send` y `recv`, y `_init_peer`
-    para preparar su propio estado.
+    Handles the client side of the three-way handshake, which is identical for
+    all protocols except for the `protocol` nibble in the header and the state
+    required by each protocol for data transfer. The server side is handled by
+    Listener. Subclasses implement `send` and `recv`, as well as `_init_peer`
+    to initialize their own state.
     """
 
-    # Nibble `protocol` del header. Lo define cada subclase.
     PROTOCOL_ID = 0
     TAG = "transporte"
 
@@ -70,22 +65,16 @@ class BaseTransport(ABC):
         self.sock = sock
         self.remote_address = remote_address or (host, port)
 
-        self.sequence_number = 0  # TODO deberia ser un random
-        self.exp_sequence_number = 0  # TODO deberia ser un random
-        # Antes de empezar considero que no hay conexion, entonces esta cerrado
+        self.sequence_number = 0  
+        self.exp_sequence_number = 0  
         self.is_closed = True
         self.timeout = TIMEOUT
         self.max_retries = MAX_RETRIES
-        # lo prende cancel() desde otro hilo
         self.cancel_requested = threading.Event()
-
-    ###########################################################################
-    # CANCELACION
-    ###########################################################################
 
     def cancel(self) -> None:
         """
-        Pide abortar la transferencia en curso. Se llama desde otro hilo.
+        Requests that the current transfer be aborted. Called from another thread.
         """
         logger.debug(
             f"[{self.TAG}] cancel(): cancelacion pedida desde otro hilo"
@@ -97,16 +86,16 @@ class BaseTransport(ABC):
 
     def notify_abort(self) -> None:
         """
-        Le avisa al otro extremo que cortamos, para que no quede
-        esperando para siempre.
+        Notifies the peer that we have terminated the transfer, so it does not
+        remain waiting indefinitely.
 
-        Van los dos bits prendidos, ERR y CANCEL:
-        - ERR: le avisa al otro extremo que hubo un error y que no
-          espere mas.
-        - CANCEL: le avisa al otro extremo que el error fue deliberado.
+        Both bits are set: ERR and CANCEL:
+        - ERR: notifies the peer that an error occurred and that it should stop
+        waiting.
+        - CANCEL: notifies the peer that the error was intentional.
         """
         if self.sock is None or self.remote_address is None:
-            return  # sin peer el aviso iria a la nada
+            return  
 
         err_packet = packet.make_packet(
             version=VERSION,
@@ -129,12 +118,9 @@ class BaseTransport(ABC):
                 )
                 return
 
-    ###########################################################################
-    # HANDSHAKE
-    ###########################################################################
 
     def connect(self) -> None:
-        """lado cliente, inicia la comunicacion."""
+        """Client side; initiates communication."""
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(self.timeout)
@@ -168,8 +154,6 @@ class BaseTransport(ABC):
                     trace.invalid(server_address)
                     continue
 
-                # Cualquier respuesta con otra version corta, incluido el ERR
-                # con que el Listener rechaza la nuestra: reintentar no sirve.
                 version = packet.get_header_version(data)
                 if version != VERSION:
                     trace.bad_version(server_address, version, VERSION)
@@ -191,7 +175,6 @@ class BaseTransport(ABC):
                         ack_packet = packet.make_packet(
                             version=VERSION,
                             protocol=self.PROTOCOL_ID,
-                            # la variable ya tiene el SYN = 0
                             flags=packet.ACK_MASK,
                             sequence_number=client_isn + 1,
                             ack=server_isn + 1,
@@ -216,43 +199,39 @@ class BaseTransport(ABC):
         )
 
     def _init_peer(self, sequence_number, exp_sequence_number) -> None:
-        """Pone la sesion en estado de poder enviar y recibir datos.
+        """
+        Puts the session in a state where it can send and receive data.
 
-        El handshake ya esta hecho: aca cada protocolo arma el estado
-        extra que necesita encima de los numeros de secuencia. Lo minimo
-        que todos necesitan son los numeros y marcar la conexion abierta;
-        el que tenga algo mas (SACK con su ventana) lo sobreescribe.
+        The handshake is already complete: each protocol initializes the additional
+        state it needs on top of the sequence numbers. At a minimum, all protocols
+        need the sequence numbers and must mark the connection as open; protocols
+        with additional state (such as SACK with its window) override this method.
         """
         self.sequence_number = sequence_number
         self.exp_sequence_number = exp_sequence_number
         self.is_closed = False
 
-    ###########################################################################
-    # FIN DEL HANDSHAKE
-    ###########################################################################
 
     @abstractmethod
     def send(self, data: bytes) -> None:
-        """Recibe un buffer de cualquier tamaño, cliente y servidor no
-        tienen idea de como el protocolo maneja el particionado"""
+        """Receives a buffer of any size; the client and server do not need to know
+        how the protocol handles packet segmentation.
+        """
         pass
 
     @abstractmethod
     def recv(self) -> bytes:
-        """Rearma las partes de un buffer y lo entrega transparente"""
+        """Reassembles the parts of a buffer and returns it transparently."""
         pass
 
-    ###########################################################################
-    # CIERRE
-    ###########################################################################
 
     def shutdown(self) -> None:
         """
-        Aborta: le avisa al otro extremo y corta lo que este bloqueado.
+        Aborts the transfer: notifies the peer and terminates whatever is blocked.
         """
         if self.sock is None:
             self.is_closed = True
-            return  # ya se solto el socket: no repito el aviso ni el cierre
+            return  
 
         self.notify_abort()
         logger.debug(
@@ -262,10 +241,10 @@ class BaseTransport(ABC):
 
     def close(self) -> None:
         """
-        Libera el socket sin avisarle nada al otro extremo.
+        Closes the socket without notifying the peer.
 
-        Cierre normal: tambien se llama al terminar una transferencia exitosa,
-        asi que no puede mandar un aviso de aborto.
+        Normal closure: this is also called after a successful transfer, so it
+        cannot send an abort notification.
         """
         self.is_closed = True
         sock, self.sock = self.sock, None

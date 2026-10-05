@@ -2,16 +2,11 @@ import time
 
 from lib.protocols.selective_ack.sack_option import covers
 
-DUP_ACKS_THRESHOLD = 3  # Duplicate ACKs needed before retransmitting.
-
-# What handle_ack() did with an ACK, so the caller can report it.
-NEW_ACK = "new"  # it moved send_base forward
-STALE_ACK = "stale"  # older than send_base, or nothing in flight:
-# ignored
-DUP_ACK = "duplicate"  # same ACK as before, counted towards the fast
-# retransmit
-FAST_RETRANSMIT = "fast_retransmit"  # it reached the threshold:
-# retransmit the hole
+DUP_ACKS_THRESHOLD = 3  
+NEW_ACK = "new"  
+STALE_ACK = "stale" 
+DUP_ACK = "duplicate"  
+FAST_RETRANSMIT = "fast_retransmit" 
 
 
 class SentSegment:
@@ -40,14 +35,11 @@ class SentSegment:
 class ACKSender:
 
     def __init__(self, initial_seq, cwnd, timeout):
-        # send_base is the cumulative ACK: we have everything up to here.
         self.send_base = initial_seq
         self.next_seq = initial_seq
         self.cwnd = cwnd
         self.timeout = timeout
-        # The in-flight segments, always ordered by seq.
         self.window = []
-        # How many identical ACKs we got, for the fast retransmit.
         self.dup_acks = 0
 
     @property

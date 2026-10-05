@@ -33,10 +33,6 @@ class SelectiveAck(BaseTransport):
     PROTOCOL_ID = 2
     TAG = "SACK"
 
-    ###########################################################################
-    # Here ends the handshake, it is already in BaseTransport
-    ###########################################################################
-
     # Puts the session in a state ready to send and receive data.
     def _init_peer(self, sequence_number, exp_sequence_number) -> None:
         self.sequence_number = sequence_number
@@ -46,9 +42,6 @@ class SelectiveAck(BaseTransport):
         self.sock.settimeout(POLL_INTERVAL)
         self.is_closed = False
 
-    ###########################################################################
-    # Here starts the data transfer
-    ###########################################################################
 
     # Send all the data, respecting the window, and wait for ACKs.
     def send(self, data: bytes) -> None:
@@ -66,7 +59,7 @@ class SelectiveAck(BaseTransport):
 
         total = len(chunks)
         sent = 0
-        # _wait_event, _handle_ack y _retransmit narran sobre el mismo send()
+
         self._send_trace = SackSendTrace(
             len(data),
             total,
@@ -295,9 +288,6 @@ class SelectiveAck(BaseTransport):
                 trace.done()
                 return bytes(received)
 
-    ###########################################################################
-    # Packet assembly
-    ###########################################################################
 
     def _sendto(self, sock, data: bytes, trace) -> None:
         """sendto() that turns the error of a closed connection into

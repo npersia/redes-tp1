@@ -27,11 +27,7 @@ class TCPTransport(BaseTransport):
         self.sock.connect((self.host, self.port))
 
     def send(self, data: bytes) -> None:
-        # En TCP sendall envía todo el buffer.
-        # En StopWait/SACK (UDP), la clase iterará internamente `data`
-        # en bloques MSS de 1024 bytes.
         self.sock.sendall(data)
-        # Señaliza fin de datos en el stream TCP
         self.sock.shutdown(socket.SHUT_WR)
 
     def recv(self) -> bytes:
@@ -45,8 +41,8 @@ class TCPTransport(BaseTransport):
 
     def shutdown(self) -> None:
         """
-        Aborta lo que este bloqueado. El aviso al otro extremo lo manda
-        el kernel.
+        Aborts whatever is blocked. The kernel sends the notification
+        to the other end.
         """
         if self.sock is None:
             return
@@ -54,14 +50,12 @@ class TCPTransport(BaseTransport):
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
-            # nunca se conecto, ya estaba cerrado, o es el socket de
-            # escucha
             pass
         self.close()
 
     def close(self) -> None:
         """
-        Libera el socket. Idempotente.
+        Closes the socket. Idempotent.
         """
         sock, self.sock = self.sock, None
         if sock is None:

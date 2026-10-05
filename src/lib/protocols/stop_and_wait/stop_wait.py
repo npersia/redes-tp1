@@ -10,25 +10,12 @@ from lib.protocols.base_transport import (
 import lib.protocols.packet.packet as packet
 from lib.protocols.stop_and_wait.trace import RecvTrace, SendTrace
 
-
-# CONSTANTES
 MAX_PAYLOAD_SIZE = 1400
 
 
-# OJO QUE CAMBIO LA CABECERA PORQUE ES UDP, NECESITO SABER EL
-# REMOTE ADDRESS PARA TRABAJAR. TCP ME LO DABA
 class StopAndWait(BaseTransport):
     PROTOCOL_ID = 1
     TAG = "SW"
-
-    # ACA TERMINA EL HANDSHAKE, YA ESTA EN BASE_TRANSPORT
-
-    # SW no sobreescribe _init_peer: no necesita estado extra, con los
-    # numeros de secuencia y la sesion abierta alcanza.
-
-    # ACA EMPIEZA LA TRANSFERENCIA
-
-    # ACA TERMINA EL HANDSHAKE, HAY QUE MOVERLO A BASE_TRANSPORT
 
     def send(self, data: bytes) -> None:
         if self.is_closed or self.sock is None:
@@ -114,9 +101,6 @@ class StopAndWait(BaseTransport):
                         )
 
                     if not packet.get_flag_ACK(flags_byte):
-                        # Un dato que ya entrego recv(): el otro no vio el ACK
-                        # y sigue reintentando. Si no se lo reconfirmo, los dos
-                        # quedan en send() ignorandose (livelock).
                         seq = packet.get_header_sequence_paquet(resp)
                         if seq < self.exp_sequence_number:
                             trace.old_data(seq, self.exp_sequence_number)
@@ -128,7 +112,7 @@ class StopAndWait(BaseTransport):
                     ack_num = packet.get_header_ack(resp)
                     if ack_num == expected_ack:
                         ack_received = True
-                        # se incrementa el seq number en n bytes
+                        # Increment the sequence number by n bytes
                         self.sequence_number = expected_ack
                     else:
                         trace.bad_ack(ack_num, expected_ack)
@@ -194,8 +178,6 @@ class StopAndWait(BaseTransport):
                     raise ConnectionClosed(
                         "Transferencia abortada por error remoto (ERR flag)."
                     )
-
-                # Si retransmiten el SYN-ACK del handshake
                 if (
                     packet.get_flag_SYN(flags_byte)
                     and packet.get_flag_ACK(flags_byte)
@@ -206,14 +188,11 @@ class StopAndWait(BaseTransport):
 
                 seq = packet.get_header_sequence_paquet(data)
 
-                # Llegó el paquete esperado
                 if seq == self.exp_sequence_number:
                     payload = packet.get_payload(data)
                     payload_len = len(payload)
                     received_buffer.extend(payload)
 
-                    # Avanzamos el apuntador de recepción la cantidad
-                    # de bytes recibidos
                     if payload_len > 0:
                         packet_bytes = payload_len
                     else:
@@ -227,7 +206,6 @@ class StopAndWait(BaseTransport):
                         trace.done()
                         return bytes(received_buffer)
 
-                # el paquete esta duplicado o vencido
                 elif seq < self.exp_sequence_number:
                     trace.duplicate(seq, self.exp_sequence_number)
                     self.send_ack()
