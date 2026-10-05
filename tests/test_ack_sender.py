@@ -1,4 +1,6 @@
-"""Estado del emisor de SACK: ventana, ACKs acumulativos/duplicados/viejos y timeouts."""
+"""Estado del emisor de SACK: ventana, ACKs acumulativos/duplicados/viejos y
+timeouts.
+"""
 
 import time
 import unittest
@@ -16,8 +18,8 @@ from lib.protocols.selective_ack.ack_sender import (
 
 CWND = 4
 LARGO = 100
-NUNCA = 3600.0      # timeout que no vence durante el test
-YA = 0.0            # timeout vencido de entrada
+NUNCA = 3600.0  # timeout que no vence durante el test
+YA = 0.0  # timeout vencido de entrada
 
 
 def emisor_con(n, timeout=NUNCA, cwnd=CWND):
@@ -103,8 +105,11 @@ class TestAckNuevo(unittest.TestCase):
         s, segs = emisor_con(2)
         s.handle_ack(150, [])
         self.assertEqual(s.send_base, 150)
-        self.assertEqual(s.window, [segs[1]],
-                         "1..101 queda confirmado; 101..201 solo a medias y sigue en vuelo")
+        self.assertEqual(
+            s.window,
+            [segs[1]],
+            "1..101 queda confirmado; 101..201 solo a medias y sigue en vuelo",
+        )
 
 
 class TestAckViejo(unittest.TestCase):
@@ -152,21 +157,26 @@ class TestDuplicadosYFastRetransmit(unittest.TestCase):
         s, _ = emisor_con(4)
         for _ in range(DUP_ACKS_THRESHOLD):
             s.handle_ack(1, [])
-        self.assertEqual(s.dup_acks, 0, "no reenvia el mismo hueco en cada duplicado")
+        self.assertEqual(
+            s.dup_acks,
+            0,
+            "no reenvia el mismo hueco en cada duplicado"
+        )
         _, estado = s.handle_ack(1, [])
         self.assertEqual(estado, DUP_ACK)
 
     def test_el_hueco_saltea_los_segmentos_sackeados(self):
         s, segs = emisor_con(4)
-        s.handle_ack(101, [])                       # 1..101 confirmado
-        bloques = [(201, 401)]                      # tiene 201..401, falta 101..201
+        s.handle_ack(101, [])  # 1..101 confirmado
+        bloques = [(201, 401)]  # tiene 201..401, falta 101..201
         for _ in range(DUP_ACKS_THRESHOLD):
             objetivo, estado = s.handle_ack(101, bloques)
         self.assertEqual(estado, FAST_RETRANSMIT)
         self.assertIs(objetivo, segs[1])
 
     def test_fast_retransmit_sin_hueco_devuelve_none(self):
-        """Todo lo que esta en vuelo esta sackeado: no hay nada que reenviar."""
+        """Todo lo que esta en vuelo esta sackeado: no hay nada que reenviar.
+        """
         s, _ = emisor_con(2)
         for _ in range(DUP_ACKS_THRESHOLD):
             objetivo, estado = s.handle_ack(1, [(1, 201)])
@@ -211,7 +221,9 @@ class TestTimeout(unittest.TestCase):
         self.assertIs(s.on_timeout(), segs[0])
 
     def test_vencido_borra_las_marcas_sack(self):
-        """Las marcas pudieron quedar viejas (el receptor las descarta): se decide de cero."""
+        """Las marcas pudieron quedar viejas (el receptor las descarta): se
+        decide de cero.
+        """
         s, segs = emisor_con(3, timeout=YA)
         s.handle_ack(1, [(1, 101), (201, 301)])
         time.sleep(0.001)
@@ -220,12 +232,13 @@ class TestTimeout(unittest.TestCase):
 
     def test_solo_mira_el_deadline_del_mas_viejo(self):
         s, segs = emisor_con(2, timeout=NUNCA)
-        segs[1].deadline = 0            # vencido, pero no es el primero de la ventana
+        segs[1].deadline = 0  # vencido, pero no es el primero de la ventana
         self.assertIsNone(s.on_timeout())
 
 
 class TestFinVacio(unittest.TestCase):
-    """El FIN de un archivo vacio ocupa 1 numero de secuencia, como en el receptor.
+    """El FIN de un archivo vacio ocupa 1 numero de secuencia, como en el
+    receptor.
 
     Antes `end` era `seq + len(payload)`: un FIN sin payload quedaba con
     end == seq, se daba por confirmado sin su ACK y nunca se reenviaba (los dos

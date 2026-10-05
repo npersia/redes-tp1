@@ -1,14 +1,17 @@
 from mininet.topo import Topo
-from mininet.link import TCLink
+
 
 class TopologiaBasica(Topo):
+    "Caso 1 de topologia basica"
+    "- 2 hosts y 2 caminos posibles entre ellos"
+    "- imagen topologia: ./topologiaBasica.png"
 
     def __init__(self):
         Topo.__init__(self)
 
         mtuBase = 1500
         delayBase = '5ms'
-        perdidaBase = 
+        perdidaBase = 10
 
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')

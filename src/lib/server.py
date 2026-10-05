@@ -1,13 +1,25 @@
 import os
 import threading
-import socket
 
 from lib.cli.server_cli import parse_arguments
 from lib.configuration.server_config import get_storage_dir, load_config
-from lib.file_transfer.file_transfer import receive_content, send_error, send_file, write_file
+from lib.file_transfer.file_transfer import (
+    InvalidMessage,
+    is_upload_request,
+    parse_upload_request,
+    receive_content,
+    send_error,
+    send_file,
+    send_ok,
+    write_file,
+)
 from lib.logger.logger import configure, logger
 from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
 from lib.protocols.listener import Listener
+
+# Tamanio maximo de archivo que el servidor acepta en un upload.
+MAX_FILE_SIZE = 1 * 1024**3
+
 
 class Dispatcher:
     def __init__(self):
@@ -28,7 +40,7 @@ class Dispatcher:
 
                 thread = threading.Thread(
                     target=self._worker,
-                    args=(connection, storage_dir, handle_connection)
+                    args=(connection, storage_dir, handle_connection),
                 )
                 thread.connection = connection
 
@@ -36,8 +48,11 @@ class Dispatcher:
                     self.threads.append(thread)
 
                 thread.start()
-                logger.debug(f"[Servidor] hilo {thread.name} atendiendo a {connection.remote_address}; "
-                             f"{len(self.threads)} conexion(es) activa(s)")
+                logger.debug(
+                    f"[Servidor] hilo {thread.name} atendiendo a "
+                    f"{connection.remote_address}; "
+                    f"{len(self.threads)} conexion(es) activa(s)"
+                )
         finally:
             transport.close()
             self._stop()
@@ -49,7 +64,10 @@ class Dispatcher:
             logger.info(f"[Servidor] {cancelled}")
         except (ConnectionClosed, OSError) as error:
             if self.stopping.is_set():
-                logger.info("[Servidor] Transferencia cancelada por cierre del servidor.")
+                logger.info(
+                    "[Servidor] Transferencia cancelada por "
+                    "cierre del servidor."
+                )
             else:
                 logger.error(f"[Servidor] Error en la conexión: {error}")
         finally:
@@ -63,12 +81,17 @@ class Dispatcher:
         with self.lock:
             active_threads = list(self.threads)
 
-        logger.debug(f"[Servidor] cerrando: {len(active_threads)} transferencia(s) en curso a abortar")
+        logger.debug(
+            f"[Servidor] cerrando: {len(active_threads)} "
+            f"transferencia(s) en curso a abortar"
+        )
         for thread in active_threads:
-            thread.connection.shutdown() #avisa ERR+CANCEL y recien despues cierra
+            # avisa ERR+CANCEL y recien despues cierra
+            thread.connection.shutdown()
 
         for thread in active_threads:
             thread.join()
+
 
 def is_download_request(content):
     return content.startswith(b"DOWNLOAD ")
@@ -89,40 +112,79 @@ def send_requested_file(connection, content, storage_dir):
     logger.error(f"[Servidor] El archivo '{requested_filepath}' no existe.")
     send_error(connection, f"El archivo '{requested_filepath}' no existe.")
 
-def save_uploaded_file(content, storage_dir):
-    first_newline = content.find(b"\n")
-    if first_newline == -1:
-        logger.error("[Servidor] Formato de UPLOAD inválido.")
+
+def receive_uploaded_file(connection, content, storage_dir, stopping):
+    try:
+        request = parse_upload_request(content)
+    except InvalidMessage as error:
+        logger.error(f"[Servidor] {error}")
+        send_error(connection, str(error))
         return
-    header = content[:first_newline]
-    file_bytes = content[first_newline + 1:]
-    filename = header[len(b"UPLOAD "):].decode("utf-8")
-    filename = os.path.basename(filename)
+    if request.size > MAX_FILE_SIZE:
+        logger.error(
+            f"[Servidor] Rechazo '{request.filename}': "
+            f"{request.size} bytes supera el límite de {MAX_FILE_SIZE}."
+        )
+        send_error(
+            connection,
+            f"El archivo ({request.size} bytes) supera "
+            f"el límite de {MAX_FILE_SIZE} bytes.",
+        )
+        return
+    send_ok(connection)
+
+    file_bytes = receive_content(connection)
+    if stopping.is_set():
+        logger.info(
+            "[Servidor] Transferencia cancelada, "
+            "no se guarda el archivo."
+        )
+        return
+    if len(file_bytes) != request.size:
+        logger.error(
+            f"[Servidor] '{request.filename}': se declararon "
+            f"{request.size} bytes y llegaron {len(file_bytes)}; "
+            f"no se guarda."
+        )
+        return
+    filename = os.path.basename(request.filename)
     target_filepath = os.path.join(storage_dir, filename)
     logger.info(f"[Servidor] Guardando en '{target_filepath}'...")
     write_file(target_filepath, file_bytes)
-    logger.info(f"[Servidor] Archivo '{filename}' guardado correctamente ({len(file_bytes)} bytes).")
+    logger.info(
+        f"[Servidor] Archivo '{filename}' guardado "
+        f"correctamente ({len(file_bytes)} bytes)."
+    )
+
 
 def handle_connection(connection, storage_dir, stopping):
-    try: 
+    try:
         received_content = receive_content(connection)
         if stopping.is_set():
-            logger.info("[Servidor] Transferencia cancelada, no se guarda el archivo.")
+            logger.info(
+                "[Servidor] Transferencia cancelada, "
+                "no se guarda el archivo."
+            )
             return
         if is_download_request(received_content):
             send_requested_file(connection, received_content, storage_dir)
-        elif received_content.startswith(b"UPLOAD "):
-            save_uploaded_file(received_content, storage_dir)
+        elif is_upload_request(received_content):
+            receive_uploaded_file(
+                connection, received_content, storage_dir, stopping
+            )
         else:
             logger.error("[Servidor] Petición no reconocida.")
-    finally: 
+    finally:
         connection.close()
 
 
-def run_server(arguments, storage_dir,shutdown_event):
+def run_server(arguments, storage_dir, shutdown_event):
     transport = Listener(arguments.host, arguments.port)
     transport.start_server()
-    logger.info(f"[Servidor] Esperando recibir archivos en {arguments.host}:{arguments.port}...")
+    logger.info(
+        f"[Servidor] Esperando recibir archivos en "
+        f"{arguments.host}:{arguments.port}..."
+    )
     dispatcher = Dispatcher()
     dispatcher.start(shutdown_event, transport, storage_dir)
 
@@ -136,7 +198,7 @@ def main():
     server_thread = threading.Thread(
         target=run_server,
         args=(arguments, storage_dir, shutdown_event),
-        daemon=True
+        daemon=True,
     )
     server_thread.start()
     input("Presione Enter para detener el servidor...\n")

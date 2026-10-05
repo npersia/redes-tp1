@@ -1,4 +1,5 @@
-"""Estado del receptor de SACK: entrega en orden, buffer y bloques a anunciar."""
+"""Estado del receptor de SACK: entrega en orden, buffer y bloques a anunciar.
+"""
 
 import unittest
 
@@ -113,7 +114,11 @@ class TestDuplicados(unittest.TestCase):
         entregado, estado = self.r.accept(*seg(101, 100, b"y"))
         self.assertEqual(estado, DUPLICATE)
         self.assertEqual(entregado, b"")
-        self.assertEqual(self.r.out_of_order[101][1], b"x" * 100, "se queda con la primera copia")
+        self.assertEqual(
+            self.r.out_of_order[101][1],
+            b"x" * 100,
+            "se queda con la primera copia"
+        )
 
     def test_fin_repetido(self):
         self.r.accept(1, 1, b"")
@@ -152,7 +157,11 @@ class TestVentanaDeRecepcion(unittest.TestCase):
     def test_la_ventana_se_mueve_con_rcv_next(self):
         self.r.accept(*seg(1, 100))
         _, estado = self.r.accept(*seg(INICIO + RWIND, 10))
-        self.assertEqual(estado, BUFFERED, "con rcv_next=101 el borde paso a 501")
+        self.assertEqual(
+            estado,
+            BUFFERED,
+            "con rcv_next=101 el borde paso a 501"
+        )
 
 
 if __name__ == "__main__":

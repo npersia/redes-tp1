@@ -38,29 +38,47 @@ class TestCabecera(unittest.TestCase):
         self.assertEqual(packet.get_header_flags(p), 0b00001000)
 
     def test_err_con_cancel_es_el_aborto_deliberado(self):
-        d = parse(packet.make_packet(flags=packet.ERR_MASK | packet.CANCEL_MASK))
+        d = parse(
+            packet.make_packet(flags=packet.ERR_MASK | packet.CANCEL_MASK)
+        )
         self.assertEqual((d["ERR"], d["CANCEL"]), (1, 1))
         self.assertEqual((d["SYN"], d["FIN"], d["ACK"]), (0, 0, 0))
 
     def test_los_bits_2_a_0_siguen_reservados(self):
         # CANCEL no debe pisar lo que queda libre para el futuro.
-        usados = (packet.SYN_MASK | packet.FIN_MASK | packet.ERR_MASK
-                  | packet.ACK_MASK | packet.CANCEL_MASK)
+        usados = (
+            packet.SYN_MASK
+            | packet.FIN_MASK
+            | packet.ERR_MASK
+            | packet.ACK_MASK
+            | packet.CANCEL_MASK
+        )
         self.assertEqual(usados, 0b11111000)
 
     def test_flags_combinados(self):
         d = parse(packet.make_packet(flags=packet.SYN_MASK | packet.ACK_MASK))
-        self.assertEqual((d["SYN"], d["ACK"], d["FIN"], d["ERR"]), (1, 1, 0, 0))
+        self.assertEqual(
+            (d["SYN"], d["ACK"], d["FIN"], d["ERR"]),
+            (1, 1, 0, 0)
+        )
 
     def test_sin_flags(self):
         d = parse(packet.make_packet())
-        self.assertEqual((d["SYN"], d["ACK"], d["FIN"], d["ERR"]), (0, 0, 0, 0))
+        self.assertEqual(
+            (d["SYN"], d["ACK"], d["FIN"], d["ERR"]),
+            (0, 0, 0, 0)
+        )
 
     def test_todos_los_flags(self):
-        todos = (packet.SYN_MASK | packet.FIN_MASK
-                 | packet.ERR_MASK | packet.ACK_MASK)
+        todos = (
+            packet.SYN_MASK | packet.FIN_MASK | packet.ERR_MASK
+            | packet.ACK_MASK
+        )
         d = parse(packet.make_packet(flags=todos))
-        self.assertEqual((d["SYN"], d["FIN"], d["ERR"], d["ACK"]), (1, 1, 1, 1))
+        self.assertEqual(
+            (d["SYN"], d["FIN"], d["ERR"], d["ACK"]),
+            (1, 1, 1, 1)
+        )
 
     def test_flags_se_truncan_a_8_bits(self):
         p = packet.make_packet(flags=0x1FF)
@@ -86,7 +104,7 @@ class TestCabecera(unittest.TestCase):
                 self.assertEqual(packet.get_header_ack(p), ack)
 
     def test_seq_fuera_de_rango_de_32_bits_rompe(self):
-        # El protocolo no hace wrap-around: un seq >= 2^32 revienta al serializar.
+        # No hay wrap-around: seq >= 2^32 revienta al serializar.
         with self.assertRaises(OverflowError):
             packet.make_packet(sequence_number=2**32)
 
@@ -98,6 +116,7 @@ class TestCabecera(unittest.TestCase):
 
     def test_tamano_total_respeta_mtu_de_1500(self):
         from base import sw
+
         p = packet.make_packet(payload=b"z" * sw.MAX_PAYLOAD_SIZE)
         # 20 (IP) + 8 (UDP) + cabecera RDT + payload
         self.assertLessEqual(20 + 8 + len(p), 1500)

@@ -38,9 +38,13 @@ def correr(verbosidad=2):
 
 
 def lineas_ejecutables(ruta):
-    """Lineas de codigo real (sin comentarios, docstrings ni continuaciones)."""
+    """Lineas de codigo real.
+
+    Sin comentarios, docstrings ni continuaciones.
+    """
     import dis
     import inspect
+
     fuente = open(ruta, encoding="utf-8").read()
     codigo = compile(fuente, ruta, "exec")
     encontradas = set()
@@ -62,7 +66,8 @@ def reporte(contadores):
     print("=" * 72)
     ejecutadas_por_archivo = {}
     for (archivo, linea), n in contadores.counts.items():
-        ejecutadas_por_archivo.setdefault(os.path.abspath(archivo), set()).add(linea)
+        archivo_abs = os.path.abspath(archivo)
+        ejecutadas_por_archivo.setdefault(archivo_abs, set()).add(linea)
 
     for objetivo in OBJETIVOS:
         total = lineas_ejecutables(objetivo)
@@ -85,8 +90,10 @@ def main():
         resultado = correr()
         return 0 if resultado.wasSuccessful() else 1
 
-    tracer = trace.Trace(count=1, trace=0, ignoredirs=[sys.prefix, sys.exec_prefix])
-    threading.settrace(tracer.globaltrace)     # para los hilos de los tests
+    tracer = trace.Trace(
+        count=1, trace=0, ignoredirs=[sys.prefix, sys.exec_prefix]
+    )
+    threading.settrace(tracer.globaltrace)  # para los hilos de los tests
     resultado = tracer.runfunc(correr, verbosidad=1)
     threading.settrace(None)
     reporte(tracer.results())

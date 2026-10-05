@@ -1,6 +1,6 @@
 # Suite de pruebas de Stop & Wait y Selective ACK
 
-344 tests, sin dependencias externas (solo `unittest` y `trace` de la stdlib).
+418 tests, sin dependencias externas (solo `unittest` y `trace` de la stdlib).
 
 ```bash
 python3 tests/run_tests.py              # correr todo
@@ -42,6 +42,7 @@ test que falla.
 | `test_packet.py` | Serializado de la cabecera: flags, hlen, seq/ack, opciones, payload. |
 | `test_connect.py` | Handshake lado cliente: retransmision del SYN, SYN-ACK invalidos, agotamiento de reintentos. |
 | `test_accept.py` | Handshake lado servidor: socket efimero, retransmision del SYN-ACK, SYN duplicados, apagado. |
+| `test_version.py` | Version del protocolo en el handshake: `connect()` aborta con `UnsupportedVersion`, el `Listener` rechaza el SYN con ERR y sigue escuchando. |
 | `test_send.py` | Chunking, FIN, avance del seq, retransmision, ACK viejos/ajenos, ERR, agotamiento. |
 | `test_recv.py` | Reensamblado, duplicados, huecos, ACK acumulativo, ERR, cierre. |
 | `test_e2e.py` | Cliente y servidor reales con perdida determinista y aleatoria reproducible. |
@@ -56,6 +57,8 @@ test que falla.
 | `test_sack_timeout.py` | Retransmision por timeout: cuando salta, a los cuantos ms, y reenvios espurios. |
 | `test_sack_timeout_perdida.py` | Timeout + perdida: doble timeout, fast retransmit perdido, agotamiento. |
 | `test_sack_errores.py` | ERR remoto, trafico ajeno, datagramas invalidos, limite de silencio de `recv()` (armado con el primer dato), bordes y cierre. |
+| `test_cambio_de_sentido.py` | Cambio de sentido en una conexion (pedido -> respuesta -> archivo) perdiendo el ACK justo antes del cambio, en SW y SACK. |
+| `test_limite_tamanio.py` | Limite de `MAX_FILE_SIZE` del upload: mensajes `UPLOAD <tamanio> <nombre>` / `OK` / `ERROR`, bordes del limite, rechazo de punta a punta. |
 | `test_sack_cancel.py` | Cancelacion en SACK: `cancel()`, ERR+CANCEL, `shutdown()` entre extremos, `close()` concurrente, upload cancelado. |
 
 Los tests de SACK heredan de `SACKTestCase` (en `base.py`), que agrega el

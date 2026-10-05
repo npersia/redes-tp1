@@ -4,7 +4,7 @@ import time
 import unittest
 
 from base import ConnectionClosed, Hilo, SWTestCase, packet, sw
-from netsim import DROP, PASS, drop_data_nth, drop_nth
+from netsim import drop_nth
 
 
 MAX = sw.MAX_PAYLOAD_SIZE
@@ -56,15 +56,26 @@ class TestSendChunking(EmisorConPeer):
     def test_un_chunk_chico_lleva_fin_y_avanza_el_seq(self):
         t, vistos = self._enviar_y_ackear(b"hola mundo")
         self.assertEqual(len(vistos), 1)
-        self.assertPaquete(vistos[0], FIN=1, ACK=0, SYN=0, ERR=0,
-                           seq=1000, payload=b"hola mundo")
+        self.assertPaquete(
+            vistos[0],
+            FIN=1,
+            ACK=0,
+            SYN=0,
+            ERR=0,
+            seq=1000,
+            payload=b"hola mundo"
+        )
         self.assertEqual(t.sequence_number, 1000 + len(b"hola mundo"))
 
     def test_payload_vacio_manda_un_paquete_con_fin_y_avanza_uno(self):
         t, vistos = self._enviar_y_ackear(b"")
         self.assertEqual(len(vistos), 1)
         self.assertPaquete(vistos[0], FIN=1, payload=b"", seq=1000)
-        self.assertEqual(t.sequence_number, 1001, "el paquete vacio cuenta como 1 byte")
+        self.assertEqual(
+            t.sequence_number,
+            1001,
+            "el paquete vacio cuenta como 1 byte"
+            )
 
     def test_exactamente_max_payload_es_un_solo_chunk(self):
         datos = b"a" * MAX
@@ -75,7 +86,7 @@ class TestSendChunking(EmisorConPeer):
         self.assertEqual(t.sequence_number, 1000 + MAX)
 
     def test_max_payload_mas_uno_se_parte_en_dos(self):
-        datos = bytes(range(256)) * 6          # 1536 > 1400
+        datos = bytes(range(256)) * 6  # 1536 > 1400
         t, vistos = self._enviar_y_ackear(datos)
         self.assertEqual(len(vistos), 2)
         self.assertPaquete(vistos[0], FIN=0, seq=1000)
@@ -89,10 +100,19 @@ class TestSendChunking(EmisorConPeer):
         datos = b"z" * (MAX * 3)
         t, vistos = self._enviar_y_ackear(datos)
         self.assertEqual(len(vistos), 3)
-        self.assertEqual([p["FIN"] for p in vistos], [0, 0, 1],
-                         "FIN solo en el ultimo chunk")
-        self.assertEqual([p["seq"] for p in vistos],
-                         [1000, 1000 + MAX, 1000 + 2 * MAX])
+        self.assertEqual(
+            [p["FIN"] for p in vistos],
+            [0, 0, 1],
+            "FIN solo en el ultimo chunk"
+        )
+        self.assertEqual(
+            [p["seq"] for p in vistos],
+            [
+                1000,
+                1000 + MAX,
+                1000 + 2 * MAX
+            ]
+        )
 
     def test_los_seq_son_contiguos_en_bytes(self):
         datos = b"x" * (MAX * 2 + 7)
@@ -113,7 +133,10 @@ class TestSendChunking(EmisorConPeer):
             self.ack(peer, addr, p["seq"] + len(p["payload"]))
             hilo.resultado_o_error()
 
-        self.assertEqual(t.sequence_number, 1000 + len(b"primero") + len(b"segundo!!"))
+        self.assertEqual(
+            t.sequence_number,
+            1000 + len(b"primero") + len(b"segundo!!")
+            )
 
     def test_cada_send_marca_fin_en_su_ultimo_chunk(self):
         """OBSERVACION: FIN no cierra la conexion, solo delimita el mensaje.
@@ -143,8 +166,11 @@ class TestSendRetransmision(EmisorConPeer):
 
         t0 = time.monotonic()
         p, addr = peer.recv(timeout=2.0)
-        self.assertGreaterEqual(time.monotonic() - t0, self.timeout * 0.8,
-                                "la retransmision espera el timeout")
+        self.assertGreaterEqual(
+            time.monotonic() - t0,
+            self.timeout * 0.8,
+            "la retransmision espera el timeout",
+            )
         self.assertEqual(p["payload"], b"payload")
         self.ack(peer, addr, p["seq"] + len(p["payload"]))
         hilo.resultado_o_error()
@@ -155,7 +181,7 @@ class TestSendRetransmision(EmisorConPeer):
         hilo = Hilo(t.send, b"identico")
         hilo.start()
         p1, _ = peer.recv(timeout=2.0)
-        p2, addr = peer.recv(timeout=2.0)         # no ackeamos la primera
+        p2, addr = peer.recv(timeout=2.0)  # no ackeamos la primera
         self.assertEqual(p1["raw"], p2["raw"])
         self.ack(peer, addr, p1["seq"] + len(p1["payload"]))
         hilo.resultado_o_error()
@@ -165,8 +191,8 @@ class TestSendRetransmision(EmisorConPeer):
         hilo = Hilo(t.send, b"datos")
         hilo.start()
 
-        p, addr = peer.recv(timeout=2.0)          # lo recibimos y "perdemos" el ACK
-        p2, addr = peer.recv(timeout=2.0)         # el emisor reintenta
+        p, addr = peer.recv(timeout=2.0)  # lo recibimos y "perdemos" el ACK
+        p2, addr = peer.recv(timeout=2.0)  # el emisor reintenta
         self.assertEqual(p["raw"], p2["raw"])
         self.ack(peer, addr, p["seq"] + len(p["payload"]))
         hilo.resultado_o_error()
@@ -180,10 +206,20 @@ class TestSendRetransmision(EmisorConPeer):
         transcurrido = time.monotonic() - t0
 
         self.assertIn("Connexion lost", str(cm.exception))
-        self.assertEqual(t.sock.tx, self.retries,
-                         f"exactamente RETRIES={self.retries} intentos")
-        self.assertGreaterEqual(transcurrido, self.timeout * self.retries * 0.8)
-        self.assertEqual(t.sequence_number, 1000, "el seq no avanza si no hubo ACK")
+        self.assertEqual(
+            t.sock.tx,
+            self.retries,
+            f"exactamente RETRIES={self.retries} intentos"
+        )
+        self.assertGreaterEqual(
+            transcurrido,
+            self.timeout * self.retries * 0.8
+            )
+        self.assertEqual(
+            t.sequence_number,
+            1000,
+            "el seq no avanza si no hubo ACK"
+            )
 
     def test_el_reintento_se_cuenta_por_chunk_no_por_mensaje(self):
         """Cada chunk arranca con su propio presupuesto de RETRIES."""
@@ -200,7 +236,9 @@ class TestSendRetransmision(EmisorConPeer):
         hilo.resultado_o_error()
         self.assertEqual(t.sequence_number, 1000 + len(datos))
 
-    def test_un_ack_atrasado_no_avanza_el_seq_y_provoca_reenvio_inmediato(self):
+    def test_un_ack_atrasado_no_avanza_el_seq_y_provoca_reenvio_inmediato(
+            self
+    ):
         """HALLAZGO (sin arreglar): un ACK que no matchea reenvia sin consumir
         reintentos.
 
@@ -220,15 +258,20 @@ class TestSendRetransmision(EmisorConPeer):
             if p is None:
                 break
             copias += 1
-            self.ack(peer, addr, 12345)           # ACK que nunca corresponde
+            self.ack(peer, addr, 12345)  # ACK que nunca corresponde
 
         self.assertTrue(hilo.is_alive(), "send() sigue girando, no aborta")
-        self.assertGreater(copias, self.retries,
-                           f"{copias} reenvios, mas que los {self.retries} reintentos")
+        self.assertGreater(
+            copias,
+            self.retries,
+            f"{copias} reenvios, mas que los {self.retries} reintentos",
+            )
         self.assertEqual(t.sequence_number, 1000, "el seq nunca avanzo")
         t.shutdown()
 
-    def test_un_paquete_de_otra_direccion_tambien_provoca_reenvio_sin_contar(self):
+    def test_un_paquete_de_otra_direccion_tambien_provoca_reenvio_sin_contar(
+            self
+    ):
         """HALLAZGO (sin arreglar): el `continue` por `addr != remote_address`
         no cuenta reintento."""
         t, peer = self.emisor(seq=1000)
@@ -242,13 +285,15 @@ class TestSendRetransmision(EmisorConPeer):
 
         # ACKs validos pero de un tercero: send() los descarta por direccion
         for _ in range(5):
-            intruso.send_pkt(local, flags=packet.ACK_MASK,
-                             ack=p["seq"] + len(p["payload"]))
+            intruso.send_pkt(
+                local, flags=packet.ACK_MASK, ack=p["seq"] + len(p["payload"])
+                )
         time.sleep(0.02)
         self.assertGreater(
-            t.sock.tx, antes,
+            t.sock.tx,
+            antes,
             "cada paquete ajeno dispara un reenvio sin consumir reintentos",
-        )
+            )
         self.assertEqual(t.sequence_number, 1000, "no avanzo con el ACK ajeno")
 
         # el ACK legitimo si cierra el chunk
@@ -265,7 +310,7 @@ class TestSendRetransmision(EmisorConPeer):
 
         p1, addr = peer.recv(timeout=2.0)
         self.ack(peer, addr, p1["seq"] + MAX)
-        self.ack(peer, addr, p1["seq"] + MAX)     # duplicado
+        self.ack(peer, addr, p1["seq"] + MAX)  # duplicado
 
         p2, addr = peer.recv(timeout=2.0)
         self.assertEqual(p2["seq"], 1000 + MAX)
@@ -292,8 +337,12 @@ class TestSendErrores(EmisorConPeer):
         hilo = Hilo(t.send, b"dato")
         hilo.start()
         p, addr = peer.recv(timeout=2.0)
-        peer.send_pkt(addr, flags=packet.ERR_MASK | packet.ACK_MASK,
-                      sequence_number=0, ack=1004)
+        peer.send_pkt(
+            addr,
+            flags=packet.ERR_MASK | packet.ACK_MASK,
+            sequence_number=0,
+            ack=1004
+        )
         with self.assertRaises(ConnectionClosed):
             hilo.resultado_o_error()
 

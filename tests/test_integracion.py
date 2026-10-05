@@ -1,4 +1,6 @@
-"""Integracion de Stop & Wait con las capas de aplicacion (client.py / server.py)."""
+"""Integracion de Stop & Wait con las capas de aplicacion (client.
+
+y / server.py)."""
 
 import logging
 import os
@@ -9,16 +11,18 @@ import time
 import types
 import unittest
 
-from base import HOST, ConnectionClosed, Hilo, SWTestCase, packet, sw
+from base import HOST, Hilo, SWTestCase, sw
 
 import lib.client as client_app
 import lib.server as server_app
-from lib.file_transfer.file_transfer import receive_content, send_file
 from lib.protocols.factory import TransportFactory
 
 
 def args(**kwargs):
-    base = {"verbosity": -1, "protocol": "sw", "host": HOST, "port": 0, "name": None}
+    base = {
+        "verbosity": -1, "protocol": "sw", "host": HOST, "port": 0,
+        "name": None
+    }
     base.update(kwargs)
     return types.SimpleNamespace(**base)
 
@@ -34,7 +38,12 @@ class TestFactory(SWTestCase):
         for nombre in ("SW", " sw ", "Sw"):
             with self.subTest(nombre=nombre):
                 self.assertIsInstance(
-                    TransportFactory.get_transport(nombre, HOST, 1), sw.StopAndWait)
+                    TransportFactory.get_transport(
+                        nombre,
+                        HOST,
+                        1
+                    ), sw.StopAndWait
+                )
 
     def test_protocolo_desconocido(self):
         with self.assertRaises(ValueError):
@@ -42,7 +51,8 @@ class TestFactory(SWTestCase):
 
 
 class TestFlujosDeAplicacion(SWTestCase):
-    """upload()/download() del cliente contra handle_connection() del servidor."""
+    """upload()/download() del cliente contra handle_connection() del
+    servidor."""
 
     def setUp(self):
         super().setUp()
@@ -83,7 +93,13 @@ class TestFlujosDeAplicacion(SWTestCase):
         destino = os.path.join(self.dir, "recibido.bin")
 
         _, puerto, hilo = self._arrancar_servidor(self.dir)
-        client_app.upload(args(port=puerto, src=origen, name=os.path.basename(destino)))
+        client_app.upload(
+            args(
+                port=puerto,
+                src=origen,
+                name=os.path.basename(destino)
+            )
+        )
         hilo.resultado_o_error(15.0)
 
         with open(destino, "rb") as f:
@@ -94,7 +110,13 @@ class TestFlujosDeAplicacion(SWTestCase):
         destino = os.path.join(self.dir, "recibido-vacio.bin")
 
         _, puerto, hilo = self._arrancar_servidor(self.dir)
-        client_app.upload(args(port=puerto, src=origen, name=os.path.basename(destino)))
+        client_app.upload(
+            args(
+                port=puerto,
+                src=origen,
+                name=os.path.basename(destino)
+            )
+        )
         hilo.resultado_o_error(15.0)
 
         self.assertTrue(os.path.exists(destino))
@@ -130,18 +152,27 @@ class TestFlujosDeAplicacion(SWTestCase):
         destino = os.path.join(self.dir, "no-deberia-existir.bin")
 
         _, puerto, hilo = self._arrancar_servidor(storage)
-        client_app.download(args(port=puerto, dst=destino, name="fantasma.bin"))
+        client_app.download(
+            args(
+                port=puerto,
+                dst=destino,
+                name="fantasma.bin"
+            )
+        )
         hilo.resultado_o_error(15.0)
 
-        self.assertFalse(os.path.exists(destino),
-                         "no debe escribir el archivo ante un ERROR")
+        self.assertFalse(
+            os.path.exists(destino),
+            "no debe escribir el archivo ante un ERROR"
+        )
 
     def test_download_usa_basename_para_evitar_path_traversal(self):
         storage = self.dir
         destino = os.path.join(self.dir, "passwd")
         _, puerto, hilo = self._arrancar_servidor(storage)
-        client_app.download(args(port=puerto, dst=destino,
-                                 name="../../../../etc/passwd"))
+        client_app.download(
+            args(port=puerto, dst=destino, name="../../../../etc/passwd")
+        )
         hilo.resultado_o_error(15.0)
         self.assertFalse(os.path.exists(destino))
 
@@ -149,15 +180,23 @@ class TestFlujosDeAplicacion(SWTestCase):
 
     def test_upload_con_perdida_en_el_handshake_y_en_los_datos(self):
         import netsim
+
         contenido = os.urandom(sw.MAX_PAYLOAD_SIZE * 2 + 1)
         origen = self._archivo("origen.bin", contenido)
         destino = os.path.join(self.dir, "recibido.bin")
 
         _, puerto, hilo = self._arrancar_servidor(self.dir)
-        # el primer datagrama de cada socket nuevo se pierde (SYN, SYN-ACK, 1er dato)
+        # el primer datagrama de cada socket nuevo se pierde (SYN, SYN-ACK,
+        # 1er dato)
         self.net.on_create = lambda s: setattr(s, "policy", netsim.drop_nth(1))
 
-        client_app.upload(args(port=puerto, src=origen, name=os.path.basename(destino)))
+        client_app.upload(
+            args(
+                port=puerto,
+                src=origen,
+                name=os.path.basename(destino)
+            )
+        )
         hilo.resultado_o_error(15.0)
 
         with open(destino, "rb") as f:
@@ -178,10 +217,9 @@ class TestDispatcher(SWTestCase):
     def test_el_shutdown_event_detiene_el_dispatcher(self):
         """Apretar Enter tiene que frenar el servidor.
 
-        Dispatcher.start() sale del while cuando accept() lanza socket.timeout
-        y el shutdown_event esta puesto. Antes el socket de escucha era
-        bloqueante y accept() se comia los timeouts, asi que el
-        `except socket.timeout: continue` del Dispatcher era codigo muerto y
+        Dispatcher.start() vuelve a mirar el shutdown_event cada vez que
+        accept() devuelve None por timeout. Antes el socket de escucha era
+        bloqueante y accept() no volvia nunca, asi que
         `server_thread.join()` de main() no retornaba nunca.
         """
         transporte = self.servidor()
@@ -215,7 +253,12 @@ class TestDispatcher(SWTestCase):
         for i in range(3):
             cliente = self.cliente(puerto)
             cliente.connect()
-            cliente.send(f"UPLOAD salida.bin\ncliente-{i}".encode())
+            cuerpo = f"cliente-{i}".encode()
+            cliente.send(f"UPLOAD {len(cuerpo)} salida.bin".encode())
+            respuesta = Hilo(cliente.recv)
+            respuesta.start()
+            self.assertEqual(respuesta.resultado_o_error(5.0), b"OK")
+            cliente.send(cuerpo)
             cliente.close()
 
         time.sleep(0.3)
@@ -226,6 +269,7 @@ class TestDispatcher(SWTestCase):
 
 def _puerto_muerto():
     import socket as s
+
     x = s.socket(s.AF_INET, s.SOCK_DGRAM)
     x.bind((HOST, 0))
     p = x.getsockname()[1]

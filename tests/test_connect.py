@@ -5,7 +5,7 @@ import time
 import unittest
 
 from base import HOST, ConnectionClosed, Hilo, SWTestCase, packet, bt, sw
-from netsim import DROP, PASS, drop_nth
+from netsim import drop_nth
 
 
 class TestConnect(SWTestCase):
@@ -24,11 +24,14 @@ class TestConnect(SWTestCase):
         hilo.start()
         return peer, cliente, hilo
 
-    def _responder_syn_ack(self, peer, addr, client_isn=0, server_isn=0,
-                           flags=None, ack=None):
+    def _responder_syn_ack(
+        self, peer, addr, client_isn=0, server_isn=0, flags=None, ack=None
+    ):
         peer.send_pkt(
             addr,
-            flags=packet.SYN_MASK | packet.ACK_MASK if flags is None else flags,
+            flags=(
+                packet.SYN_MASK | packet.ACK_MASK if flags is None else flags
+            ),
             sequence_number=server_isn,
             ack=client_isn + 1 if ack is None else ack,
         )
@@ -51,11 +54,16 @@ class TestConnect(SWTestCase):
         hilo.resultado_o_error()
         self.assertFalse(cliente.is_closed)
         self.assertEqual(cliente.sequence_number, 1, "seq = client_isn + 1")
-        self.assertEqual(cliente.exp_sequence_number, 101, "exp = server_isn + 1")
+        self.assertEqual(
+            cliente.exp_sequence_number,
+            101,
+            "exp = server_isn + 1"
+        )
         self.assertEqual(cliente.remote_address, peer.addr)
 
     def test_adopta_el_puerto_efimero_desde_el_que_le_contestan(self):
-        """El servidor real contesta desde otro socket: el cliente debe migrar."""
+        """El servidor real contesta desde otro socket: el cliente debe migrar.
+        """
         peer_escucha = self.peer()
         peer_efimero = self.peer()
         cliente = self.cliente(peer_escucha.addr[1])
@@ -78,7 +86,11 @@ class TestConnect(SWTestCase):
         self._responder_syn_ack(peer, addr)
         peer.recv()
         hilo.resultado_o_error()
-        self.assertAlmostEqual(cliente.sock.gettimeout(), self.timeout, places=4)
+        self.assertAlmostEqual(
+            cliente.sock.gettimeout(),
+            self.timeout,
+            places=4
+        )
 
     # -- retransmision y timeouts -----------------------------------------
 
@@ -91,7 +103,8 @@ class TestConnect(SWTestCase):
         transcurrido = time.monotonic() - t0
         self.assertPaquete(syn, SYN=1, seq=0)
         self.assertGreaterEqual(
-            transcurrido, self.timeout * 0.8,
+            transcurrido,
+            self.timeout * 0.8,
             "la retransmision tiene que esperar el timeout",
         )
 
@@ -106,7 +119,11 @@ class TestConnect(SWTestCase):
         syn1, addr = peer.recv()
         # no contestamos: el cliente debe volver a mandar el SYN
         syn2, addr2 = peer.recv(timeout=2.0)
-        self.assertEqual(syn1["raw"], syn2["raw"], "el SYN retransmitido es identico")
+        self.assertEqual(
+            syn1["raw"],
+            syn2["raw"],
+            "el SYN retransmitido es identico"
+        )
         self.assertEqual(addr, addr2, "usa el mismo socket/puerto")
 
         self._responder_syn_ack(peer, addr2)
@@ -125,10 +142,14 @@ class TestConnect(SWTestCase):
         self.assertIn("Timeout", str(cm.exception))
         self.assertTrue(cliente.is_closed)
         self.assertEqual(
-            len(self.net.sent("cliente")), self.retries,
+            len(self.net.sent("cliente")),
+            self.retries,
             f"tiene que mandar exactamente RETRIES={self.retries} SYN",
         )
-        self.assertGreaterEqual(transcurrido, self.timeout * self.retries * 0.8)
+        self.assertGreaterEqual(
+            transcurrido,
+            self.timeout * self.retries * 0.8
+        )
 
     # -- respuestas que hay que descartar ----------------------------------
 
@@ -136,12 +157,12 @@ class TestConnect(SWTestCase):
         peer, cliente, hilo = self._cliente_contra_peer()
         _, addr = peer.recv()
 
-        self._responder_syn_ack(peer, addr, ack=999)          # ack equivocado
+        self._responder_syn_ack(peer, addr, ack=999)  # ack equivocado
         # el cliente no acepta: retransmite el SYN
         syn2, addr2 = peer.recv(timeout=2.0)
         self.assertPaquete(syn2, SYN=1, ACK=0)
 
-        self._responder_syn_ack(peer, addr2, ack=1)           # ahora bien
+        self._responder_syn_ack(peer, addr2, ack=1)  # ahora bien
         peer.recv()
         hilo.resultado_o_error()
         self.assertFalse(cliente.is_closed)
@@ -175,7 +196,7 @@ class TestConnect(SWTestCase):
 
         peer.send(b"", addr)
         peer.send(b"\x11\x90", addr)
-        peer.send(b"\x11\x90\xff" + b"\x00" * 9, addr)   # hlen que no cierra
+        peer.send(b"\x11\x90\xff" + b"\x00" * 9, addr)  # hlen que no cierra
         self.assertTrue(hilo.is_alive(), "connect sobrevive a la basura")
 
         syn2, addr2 = peer.recv(timeout=2.0)
@@ -200,13 +221,18 @@ class TestConnect(SWTestCase):
         hilo.start()
 
         _, addr = peer_servidor.recv()
-        self._responder_syn_ack(intruso, addr, server_isn=7)   # responde el intruso
+        self._responder_syn_ack(
+            intruso,
+            addr,
+            server_isn=7
+        )  # responde el intruso
 
         ack, _ = intruso.recv()
         self.assertPaquete(ack, ACK=1)
         hilo.resultado_o_error()
         self.assertEqual(
-            cliente.remote_address, intruso.addr,
+            cliente.remote_address,
+            intruso.addr,
             "el cliente quedo hablando con el intruso",
         )
 
@@ -222,7 +248,7 @@ class TestConnect(SWTestCase):
         """
         peer, cliente, hilo = self._cliente_contra_peer()
 
-        presupuesto = self.timeout * self.retries * 3   # de sobra para fallar
+        presupuesto = self.timeout * self.retries * 3  # de sobra para fallar
         fin = time.monotonic() + presupuesto
         enviados = 0
         while time.monotonic() < fin:
@@ -230,7 +256,12 @@ class TestConnect(SWTestCase):
             if p is None:
                 continue
             # respuesta que nunca sirve (SYN sin ACK)
-            peer.send_pkt(addr, flags=packet.SYN_MASK, sequence_number=0, ack=0)
+            peer.send_pkt(
+                addr,
+                flags=packet.SYN_MASK,
+                sequence_number=0,
+                ack=0
+            )
             enviados += 1
 
         self.assertTrue(
@@ -238,10 +269,12 @@ class TestConnect(SWTestCase):
             "connect() deberia haber abandonado tras RETRIES; sigue vivo",
         )
         self.assertGreater(
-            enviados, self.retries,
-            f"retransmitio {enviados} SYN, mas que los {self.retries} reintentos",
+            enviados,
+            self.retries,
+            f"retransmitio {enviados} SYN, mas que los {self.retries} "
+            f"reintentos",
         )
-        cliente.shutdown()          # desbloquea el hilo para el tearDown
+        cliente.shutdown()  # desbloquea el hilo para el tearDown
 
     def test_reconectar_pisa_el_socket_previo_y_arrastra_el_seq(self):
         """HALLAZGO (sin arreglar): connect() usa el seq actual como ISN y no
@@ -265,13 +298,20 @@ class TestConnect(SWTestCase):
         hilo2.start()
 
         syn2, addr2 = peer2.recv()
-        self.assertEqual(syn2["seq"], 1, "el ISN del segundo SYN no se reinicia")
+        self.assertEqual(
+            syn2["seq"],
+            1,
+            "el ISN del segundo SYN no se reinicia"
+        )
         self._responder_syn_ack(peer2, addr2, client_isn=syn2["seq"])
         peer2.recv()
         hilo2.resultado_o_error()
 
         self.assertIsNot(cliente.sock, primero)
-        self.assertFalse(primero.closed, "el socket viejo nunca se cierra (fuga)")
+        self.assertFalse(
+            primero.closed,
+            "el socket viejo nunca se cierra (fuga)"
+        )
 
 
 def _puerto_libre():

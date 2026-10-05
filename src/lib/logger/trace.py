@@ -13,11 +13,15 @@ from lib.logger.logger import logger
 
 
 MB = 1024 * 1024
-PROGRESS_INTERVAL = 1.0 #segundos minimos entre dos logs de progreso, para no inundar la salida
+PROGRESS_INTERVAL = (
+    1.0  # segundos minimos entre dos logs de progreso, para
+         # no inundar la salida
+)
 
 
 class Trace:
-    """Parte comun: el prefijo, el reloj, los bytes acumulados y el limitador de progreso."""
+    """Parte comun: el prefijo, el reloj, los bytes acumulados y
+    el limitador de progreso."""
 
     def __init__(self, tag):
         self.tag = tag
