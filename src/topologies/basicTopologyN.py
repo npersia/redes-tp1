@@ -14,8 +14,6 @@ class ToplogiaBasicon(Topo):
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')
 
-
-
         self.addLink(
             h1, h2,
             cls=TCLink,
