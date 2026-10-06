@@ -10,7 +10,7 @@ from lib.protocols.handshake_trace import ConnectTrace
 VERSION = 1
 TIMEOUT = 0.10
 MAX_RETRIES = 10
-RECV_BUFFER = 2048  
+RECV_BUFFER = 2048
 ABORT_NOTICES = 3
 
 
@@ -65,8 +65,8 @@ class BaseTransport(ABC):
         self.sock = sock
         self.remote_address = remote_address or (host, port)
 
-        self.sequence_number = 0  
-        self.exp_sequence_number = 0  
+        self.sequence_number = 0
+        self.exp_sequence_number = 0
         self.is_closed = True
         self.timeout = TIMEOUT
         self.max_retries = MAX_RETRIES
@@ -74,7 +74,8 @@ class BaseTransport(ABC):
 
     def cancel(self) -> None:
         """
-        Requests that the current transfer be aborted. Called from another thread.
+        Requests that the current transfer
+          be aborted. Called from another thread.
         """
         logger.debug(
             f"[{self.TAG}] cancel(): cancelacion pedida desde otro hilo"
@@ -95,7 +96,7 @@ class BaseTransport(ABC):
         - CANCEL: notifies the peer that the error was intentional.
         """
         if self.sock is None or self.remote_address is None:
-            return  
+            return
 
         err_packet = packet.make_packet(
             version=VERSION,
@@ -118,7 +119,6 @@ class BaseTransport(ABC):
                 )
                 return
 
-
     def connect(self) -> None:
         """Client side; initiates communication."""
 
@@ -128,8 +128,11 @@ class BaseTransport(ABC):
         client_isn = self.sequence_number
 
         trace = ConnectTrace(
-            self.TAG, (self.host, self.port), client_isn,
-            self.timeout, self.max_retries
+            self.TAG,
+            (self.host, self.port),
+            client_isn,
+            self.timeout,
+            self.max_retries,
         )
 
         # SYN=1, seq = client_isn
@@ -202,19 +205,23 @@ class BaseTransport(ABC):
         """
         Puts the session in a state where it can send and receive data.
 
-        The handshake is already complete: each protocol initializes the additional
-        state it needs on top of the sequence numbers. At a minimum, all protocols
-        need the sequence numbers and must mark the connection as open; protocols
-        with additional state (such as SACK with its window) override this method.
+        The handshake is already complete:
+        each protocol initializes the additional
+        state it needs on top of the sequence numbers.
+          At a minimum, all protocols
+        need the sequence numbers and
+        must mark the connection as open; protocols
+        with additional state (such as SACK with its window)
+          override this method.
         """
         self.sequence_number = sequence_number
         self.exp_sequence_number = exp_sequence_number
         self.is_closed = False
 
-
     @abstractmethod
     def send(self, data: bytes) -> None:
-        """Receives a buffer of any size; the client and server do not need to know
+        """Receives a buffer of any size;
+          the client and server do not need to know
         how the protocol handles packet segmentation.
         """
         pass
@@ -224,14 +231,14 @@ class BaseTransport(ABC):
         """Reassembles the parts of a buffer and returns it transparently."""
         pass
 
-
     def shutdown(self) -> None:
         """
-        Aborts the transfer: notifies the peer and terminates whatever is blocked.
+        Aborts the transfer:
+        notifies the peer and terminates whatever is blocked.
         """
         if self.sock is None:
             self.is_closed = True
-            return  
+            return
 
         self.notify_abort()
         logger.debug(

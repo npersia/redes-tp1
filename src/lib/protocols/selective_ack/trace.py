@@ -17,8 +17,13 @@ class SackSendTrace(Trace):
     """Narra un send(). Los segmentos sueltos no se loguean: solo el avance."""
 
     def __init__(
-        self, total_bytes, total_segments, payload_size, cwnd, remote,
-        first_seq
+        self,
+        total_bytes,
+        total_segments,
+        payload_size,
+        cwnd,
+        remote,
+        first_seq,
     ):
         super().__init__(TAG)
         self.total_bytes = total_bytes
@@ -70,12 +75,14 @@ class SackSendTrace(Trace):
             return
         porcentaje = (
             100.0 * self.bytes / self.total_bytes
-            if self.total_bytes else 100.0
+            if self.total_bytes
+            else 100.0
         )
         sack = f" - SACK {blocks}" if blocks else ""
         extra = (
             f" - {self.retransmissions} retransmisiones"
-            if self.retransmissions else ""
+            if self.retransmissions
+            else ""
         )
         self.log(
             f"confirmados {self.bytes / MB:.1f}/"
@@ -91,14 +98,10 @@ class SackSendTrace(Trace):
         else:
             self.timeouts += 1
             motivo = "timeout"
-        self.log(
-            f"{motivo}: retransmito seq={seq} ({intento}/{tope})"
-        )
+        self.log(f"{motivo}: retransmito seq={seq} ({intento}/{tope})")
 
     def stray(self, addr, mismo_origen):
-        motivo = (
-            "paquete invalido" if mismo_origen else "origen inesperado"
-        )
+        motivo = "paquete invalido" if mismo_origen else "origen inesperado"
         self.log(
             f"descarto datagrama de {addr} mientras esperaba ACKs "
             f"({motivo})"
@@ -109,8 +112,7 @@ class SackSendTrace(Trace):
 
     def remote_cancel(self):
         self.log(
-            f"el remoto cancelo a proposito; se aborta con "
-            f"{self.balance}"
+            f"el remoto cancelo a proposito; se aborta con " f"{self.balance}"
         )
 
     def cancelled(self):
@@ -143,7 +145,7 @@ class SackRecvTrace(Trace):
     def __init__(self, remote, expected_seq, rwind):
         super().__init__(TAG)
         self.remote = remote
-        self.buffered = 0 # Arrived out of order and were buffered
+        self.buffered = 0  # Arrived out of order and were buffered
         self.duplicates = 0
         self.out_of_window = (
             0  # Discarded because they fell outside the window
@@ -154,9 +156,7 @@ class SackRecvTrace(Trace):
         )
 
     def stray(self, addr, mismo_origen):
-        motivo = (
-            "paquete invalido" if mismo_origen else "origen inesperado"
-        )
+        motivo = "paquete invalido" if mismo_origen else "origen inesperado"
         self.log(f"descarto datagrama de {addr} ({motivo})")
 
     def silence(self, limite):

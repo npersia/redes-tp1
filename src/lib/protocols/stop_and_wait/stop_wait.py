@@ -26,7 +26,7 @@ class StopAndWait(BaseTransport):
         chunks = []
 
         for i in range(0, len(data), MAX_PAYLOAD_SIZE):
-            chunks.append(data[i:i + MAX_PAYLOAD_SIZE])
+            chunks.append(data[i: i + MAX_PAYLOAD_SIZE])
         if not chunks:
             chunks = [b""]
 
@@ -79,9 +79,8 @@ class StopAndWait(BaseTransport):
                     self.sock.settimeout(self.timeout)
 
                     resp, addr = self.sock.recvfrom(RECV_BUFFER)
-                    if (
-                        addr != self.remote_address
-                        or not packet.is_valid(resp)
+                    if addr != self.remote_address or not packet.is_valid(
+                        resp
                     ):
                         trace.stray(addr, expected_ack)
                         continue
@@ -178,9 +177,8 @@ class StopAndWait(BaseTransport):
                     raise ConnectionClosed(
                         "Transferencia abortada por error remoto (ERR flag)."
                     )
-                if (
-                    packet.get_flag_SYN(flags_byte)
-                    and packet.get_flag_ACK(flags_byte)
+                if packet.get_flag_SYN(flags_byte) and packet.get_flag_ACK(
+                    flags_byte
                 ):
                     trace.syn_ack_again()
                     self.send_ack()

@@ -12,10 +12,16 @@ TAG = "SW"
 
 
 class SendTrace(Trace):
-    """Describes a send() operation. `position` is the packet currently being sent."""
+    """Describes a send() operation.
+      `position` is the packet currently being sent."""
 
     def __init__(
-        self, total_bytes, total_packets, payload_size, remote, first_seq
+        self,
+        total_bytes,
+        total_packets,
+        payload_size,
+        remote,
+        first_seq,
     ):
         super().__init__(TAG)
         self.total_bytes = total_bytes
@@ -100,7 +106,8 @@ class SendTrace(Trace):
         self.log(f"cancelado por el usuario {donde} {self.position}")
 
     def acked(self, payload_len):
-        """Acknowledged packet. Adds to the total and periodically prints progress."""
+        """Acknowledged packet.
+          Adds to the total and periodically prints progress."""
         self.packets += 1
         self.bytes += payload_len
         if not self.due():
@@ -190,7 +197,8 @@ class RecvTrace(Trace):
         )
 
     def stored(self, payload_len):
-        """In-order packet. Adds to the total and periodically prints progress."""
+        """In-order packet.
+          Adds to the total and periodically prints progress."""
         self.packets += 1
         self.bytes += payload_len
         self.idle_timeouts = 0

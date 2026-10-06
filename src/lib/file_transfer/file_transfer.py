@@ -19,7 +19,8 @@ class InvalidMessage(Exception):
 
 
 class UploadRejected(Exception):
-   """The server rejected the upload; the message contains the reason provided."""
+    """The server rejected the upload;
+      the message contains the reason provided."""
 
 
 def read_file(filepath):
@@ -43,8 +44,7 @@ def write_file(filepath, content):
     if directory:
         os.makedirs(directory, exist_ok=True)
     logger.debug(
-        f"[archivo] escribiendo {len(content)} bytes en "
-        f"'{filepath}'..."
+        f"[archivo] escribiendo {len(content)} bytes en " f"'{filepath}'..."
     )
     started = time.monotonic()
     with open(filepath, "wb") as file:
@@ -85,7 +85,8 @@ def receive_file(transport, filepath):
 
 def request_upload(transport, filename, size):
     """Requests a file upload: 'UPLOAD <size> <name>'.
-    Returns whether the server responds with OK; otherwise, raises UploadRejected.
+    Returns whether the server responds with OK;
+      otherwise, raises UploadRejected.
     """
     logger.debug(f"[archivo] pidiendo subir '{filename}' ({size} bytes)")
     transport.send(UPLOAD_PREFIX + f"{size} {filename}".encode("utf-8"))

@@ -53,10 +53,10 @@ def parse_sack_option(options):
             break
 
         if option_type == SACK_TYPE:
-            body = options[offset + OPTION_HEADER_SIZE:offset + option_len]
+            body = options[offset + OPTION_HEADER_SIZE: offset + option_len]
             for i in range(0, len(body) - BLOCK_SIZE + 1, BLOCK_SIZE):
-                left = int.from_bytes(body[i:i + 4], "big")
-                right = int.from_bytes(body[i + 4:i + 8], "big")
+                left = int.from_bytes(body[i: i + 4], "big")
+                right = int.from_bytes(body[i + 4: i + 8], "big")
                 if left < right:
                     blocks.append((left, right))
 

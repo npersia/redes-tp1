@@ -2,7 +2,10 @@ import os
 import threading
 
 from lib.cli.server_cli import parse_arguments
-from lib.configuration.server_config import get_storage_dir, load_config
+from lib.configuration.server_config import (
+    get_storage_dir,
+    load_config,
+)
 from lib.file_transfer.file_transfer import (
     InvalidMessage,
     is_upload_request,
@@ -14,7 +17,10 @@ from lib.file_transfer.file_transfer import (
     write_file,
 )
 from lib.logger.logger import configure, logger
-from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
+from lib.protocols.base_transport import (
+    ConnectionClosed,
+    TransferCancelled,
+)
 from lib.protocols.listener import Listener
 
 # Maximum file size accepted by the server for uploads.
@@ -135,8 +141,7 @@ def receive_uploaded_file(connection, content, storage_dir, stopping):
     file_bytes = receive_content(connection)
     if stopping.is_set():
         logger.info(
-            "[Servidor] Transferencia cancelada, "
-            "no se guarda el archivo."
+            "[Servidor] Transferencia cancelada, " "no se guarda el archivo."
         )
         return
     if len(file_bytes) != request.size:

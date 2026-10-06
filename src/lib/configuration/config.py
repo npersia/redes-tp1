@@ -2,10 +2,9 @@ import os
 
 
 BASE_DIR = os.path.dirname(
-    os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
-    )
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
+
 
 def load_config(filename):
     config_filepath = os.path.join(BASE_DIR, filename)

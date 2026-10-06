@@ -2,7 +2,11 @@ import socket
 
 from lib.logger.logger import logger
 import lib.protocols.base_transport as base_transport
-from lib.protocols.base_transport import RECV_BUFFER, VERSION, ConnectionClosed
+from lib.protocols.base_transport import (
+    RECV_BUFFER,
+    VERSION,
+    ConnectionClosed,
+)
 from lib.protocols.factory import TransportFactory
 from lib.protocols.handshake_trace import AcceptTrace, ListenTrace
 import lib.protocols.packet.packet as packet
@@ -59,7 +63,10 @@ class Listener:
                     if version != VERSION:
                         self.trace.bad_version(client_address, version)
                         self._reject_version(
-                            sock, client_address, client_isn, protocol_id
+                            sock,
+                            client_address,
+                            client_isn,
+                            protocol_id,
                         )
                         continue
                     peer_class = self._transport_for(protocol_id)
@@ -73,7 +80,7 @@ class Listener:
                     if peer is not None:
                         return peer
             except socket.timeout:
-                return None  
+                return None
             except Exception as e:
                 if self.is_closed:
                     self.trace.closed()
@@ -85,7 +92,8 @@ class Listener:
 
     @staticmethod
     def _transport_for(protocol_id):
-        """Connection handler class, based on the protocol requested by the SYN.
+        """Connection handler class,
+          based on the protocol requested by the SYN.
         Only classes that use this handshake are supported: they declare the
         corresponding PROTOCOL_ID in the header (TCP does not).
         """
@@ -96,7 +104,8 @@ class Listener:
 
     @staticmethod
     def _reject_version(sock, client_address, client_isn, protocol_id):
-        """Notifies the client with an ERR that its version does not match ours.
+        """Notifies the client with
+        an ERR that its version does not match ours.
         It is sent from the listening socket: there is no connection, so no
         ephemeral socket is opened. It includes our VERSION, which allows the
         client to detect the mismatch, and its connect() terminates without
@@ -113,7 +122,8 @@ class Listener:
     def _accept_syn(self, client_address, client_isn, peer_class):
         """Completes the handshake for a SYN already read from the network.
         Kept separate from accept() so the SYN does not have to be read again.
-        Returns None if the client does not complete the handshake, and accept()
+        Returns None if the client does not complete the handshake,
+          and accept()
         continues waiting.
         """
         client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -122,7 +132,7 @@ class Listener:
 
         server_isn = 0
 
-       # Respond with SYN=1, ACK=1, seq=server_isn, ack=client_isn+1
+        # Respond with SYN=1, ACK=1, seq=server_isn, ack=client_isn+1
         syn_packet = packet.make_packet(
             version=VERSION,
             protocol=peer_class.PROTOCOL_ID,
@@ -161,7 +171,8 @@ class Listener:
                         )
                         peer._init_peer(server_isn + 1, client_isn + 1)
                         trace.established(
-                            peer.sequence_number, peer.exp_sequence_number
+                            peer.sequence_number,
+                            peer.exp_sequence_number,
                         )
                         return peer
                     trace.bad_ack(packet.get_header_ack(resp), server_isn + 1)
@@ -174,7 +185,8 @@ class Listener:
 
     def shutdown(self) -> None:
         """
-        Stops listening. There is no peer to notify: already accepted connections
+        Stops listening. There is no peer to notify:
+          already accepted connections
         have their own sockets and are closed separately.
         """
         self.close()

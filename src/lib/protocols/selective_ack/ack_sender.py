@@ -2,11 +2,11 @@ import time
 
 from lib.protocols.selective_ack.sack_option import covers
 
-DUP_ACKS_THRESHOLD = 3  
-NEW_ACK = "new"  
-STALE_ACK = "stale" 
-DUP_ACK = "duplicate"  
-FAST_RETRANSMIT = "fast_retransmit" 
+DUP_ACKS_THRESHOLD = 3
+NEW_ACK = "new"
+STALE_ACK = "stale"
+DUP_ACK = "duplicate"
+FAST_RETRANSMIT = "fast_retransmit"
 
 
 class SentSegment:

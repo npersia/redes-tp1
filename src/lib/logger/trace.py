@@ -13,9 +13,7 @@ from lib.logger.logger import logger
 
 
 MB = 1024 * 1024
-PROGRESS_INTERVAL = (
-    1.0  
-)
+PROGRESS_INTERVAL = 1.0
 
 
 class Trace:

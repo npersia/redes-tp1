@@ -12,7 +12,10 @@ from lib.file_transfer.file_transfer import (
     write_file,
 )
 from lib.logger.logger import configure, logger
-from lib.protocols.base_transport import ConnectionClosed, TransferCancelled
+from lib.protocols.base_transport import (
+    ConnectionClosed,
+    TransferCancelled,
+)
 from lib.protocols.factory import TransportFactory
 
 
@@ -27,6 +30,7 @@ def create_transport(arguments):
         arguments.port,
     )
 
+
 POLL_INTERVAL = 0.2
 
 
@@ -37,7 +41,7 @@ def watch_for_enter(transport, finished):
 
     def wait_for_enter():
         if sys.stdin is None or sys.stdin.closed:
-            return  
+            return
 
         while not finished.is_set():
             try:
@@ -103,7 +107,8 @@ def download(arguments):
     try:
         transport.connect()
         send_request(
-            transport, arguments.name or os.path.basename(arguments.dst)
+            transport,
+            arguments.name or os.path.basename(arguments.dst),
         )
         logger.info(
             "[Cliente] Esperando archivo del servidor... "

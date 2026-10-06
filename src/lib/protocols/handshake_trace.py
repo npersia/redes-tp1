@@ -10,7 +10,8 @@ from lib.logger.trace import Trace
 
 
 class ListenTrace(Trace):
-    """Describes the listening socket: what arrives before a handshake starts."""
+    """Describes the listening socket:
+      what arrives before a handshake starts."""
 
     def invalid(self, addr):
         self.log(f"accept: datagrama invalido de {addr}, lo descarto")

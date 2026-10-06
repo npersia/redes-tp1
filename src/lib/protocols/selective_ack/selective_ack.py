@@ -16,7 +16,10 @@ from lib.protocols.selective_ack.sack_option import (
     make_sack_option,
     parse_sack_option,
 )
-from lib.protocols.selective_ack.trace import SackRecvTrace, SackSendTrace
+from lib.protocols.selective_ack.trace import (
+    SackRecvTrace,
+    SackSendTrace,
+)
 
 
 # CONSTANTS
@@ -42,7 +45,6 @@ class SelectiveAck(BaseTransport):
         self.sock.settimeout(POLL_INTERVAL)
         self.is_closed = False
 
-
     # Send all the data, respecting the window, and wait for ACKs.
     def send(self, data: bytes) -> None:
         if self.is_closed or self.sock is None:
@@ -51,7 +53,7 @@ class SelectiveAck(BaseTransport):
             )
 
         chunks = [
-            data[i:i + MAX_PAYLOAD_SIZE]
+            data[i: i + MAX_PAYLOAD_SIZE]
             for i in range(0, len(data), MAX_PAYLOAD_SIZE)
         ]
         if not chunks:
@@ -82,13 +84,12 @@ class SelectiveAck(BaseTransport):
                 )
 
             while sent < total and self.sender.has_room():
-                flags = (
-                    packet.FIN_MASK if sent == total - 1 else 0
-                )
+                flags = packet.FIN_MASK if sent == total - 1 else 0
                 segment = self.sender.add(chunks[sent], flags)
                 self._sendto(
-                    self._send_sock, self._data_packet(segment),
-                    self._send_trace
+                    self._send_sock,
+                    self._data_packet(segment),
+                    self._send_trace,
                 )
                 self._send_trace.segment_sent()
                 sent += 1
@@ -146,7 +147,11 @@ class SelectiveAck(BaseTransport):
 
         target, status = self.sender.handle_ack(ack, blocks)
         self._send_trace.ack(
-            status, ack, self.sender.send_base, self.sender.dup_acks, blocks
+            status,
+            ack,
+            self.sender.send_base,
+            self.sender.dup_acks,
+            blocks,
         )
         if target is not None:
             self._retransmit(target, fast=True)
@@ -155,13 +160,12 @@ class SelectiveAck(BaseTransport):
     def _retransmit(self, segment, fast: bool = False) -> None:
         if segment.retries >= self.max_retries:
             self._send_trace.gave_up(segment.seq, self.max_retries)
-            raise ConnectionClosed(
-                f"Too many retries for seq={segment.seq}."
-            )
+            raise ConnectionClosed(f"Too many retries for seq={segment.seq}.")
 
         self._sendto(
-            self._send_sock, self._data_packet(segment),
-            self._send_trace
+            self._send_sock,
+            self._data_packet(segment),
+            self._send_trace,
         )
         segment.refresh(self.sender.timeout)
         self._send_trace.retransmit(
@@ -172,8 +176,7 @@ class SelectiveAck(BaseTransport):
     def recv(self) -> bytes:
         if self.is_closed or self.sock is None:
             raise ConnectionClosed(
-                "the socket is not initialized or the connection "
-                "is closed"
+                "the socket is not initialized or the connection " "is closed"
             )
 
         received = bytearray()
@@ -195,9 +198,7 @@ class SelectiveAck(BaseTransport):
         silence_limit = self.timeout * (self.max_retries + 2)
         last_heard = time.monotonic()
         data_started = False
-        sock = (
-            self.sock
-        )  # same as in send(): survives a concurrent close()
+        sock = self.sock  # same as in send(): survives a concurrent close()
 
         while True:
             if self.cancel_requested.is_set():
@@ -287,7 +288,6 @@ class SelectiveAck(BaseTransport):
             if fin_end is not None and fin_end <= self.receiver.rcv_next:
                 trace.done()
                 return bytes(received)
-
 
     def _sendto(self, sock, data: bytes, trace) -> None:
         """sendto() that turns the error of a closed connection into

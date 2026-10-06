@@ -22,36 +22,60 @@ class TopologiaTrafico(Topo):
         switch3 = self.addSwitch("s3")
 
         self.addLink(
-            host1, switch1, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host1,
+            switch1,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            host2, switch1, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host2,
+            switch1,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            host2, switch3, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host2,
+            switch3,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            switch2, switch3, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            switch2,
+            switch3,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            host1, switch2, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host1,
+            switch2,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            host3, switch1, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host3,
+            switch1,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            host4, switch3, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host4,
+            switch3,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
         self.addLink(
-            host4, switch2, mtu=mtuBase, delay=delayBase,
-            loss=perdidaBase
+            host4,
+            switch2,
+            mtu=mtuBase,
+            delay=delayBase,
+            loss=perdidaBase,
         )
 
 

@@ -79,10 +79,9 @@ CANCEL_MASK = 0b00001000
 
 def is_valid(packet: bytes) -> bool:
     """Checks whether the datagram can be parsed as an RDT packet."""
-    return (
-        len(packet) >= HEADER_SIZE
-        and HEADER_SIZE <= get_header_hlen(packet) <= len(packet)
-    )
+    return len(packet) >= HEADER_SIZE and HEADER_SIZE <= get_header_hlen(
+        packet
+    ) <= len(packet)
 
 
 def get_header_version(packet: bytes) -> int:
@@ -192,7 +191,7 @@ def make_packet(
             v_p,
             flags & 0b11111111,
             total_hlen & 0b11111111,
-            0b00000000, 
+            0b00000000,
         ]
     )
 

@@ -1,11 +1,12 @@
-from lib.protocols.selective_ack.sack_option import add_block, discard_below
-
-DELIVERED = (
-    "delivered"  
+from lib.protocols.selective_ack.sack_option import (
+    add_block,
+    discard_below,
 )
-BUFFERED = "buffered"  
-DUPLICATE = "duplicate"  
-OUT_OF_WINDOW = "out_of_window" 
+
+DELIVERED = "delivered"
+BUFFERED = "buffered"
+DUPLICATE = "duplicate"
+OUT_OF_WINDOW = "out_of_window"
 
 
 class ACKReceiver:
@@ -53,8 +54,8 @@ class ACKReceiver:
         # Hole filled: deliver the bytes of the segments that were waiting
         # right after it, and then the ones after those.
         while self.rcv_next in self.out_of_order:
-            pending_n_bytes, pending_payload = (
-                self.out_of_order.pop(self.rcv_next)
+            pending_n_bytes, pending_payload = self.out_of_order.pop(
+                self.rcv_next
             )
             delivered.extend(pending_payload)
             self.rcv_next += pending_n_bytes
