@@ -9,6 +9,7 @@ TP1 de Redes: transferencia de archivos sobre **UDP** con protocolo **RDT**
 
 - Python 3
 - Mininet (solo para las pruebas de red)
+- xterm 
 
 ---
 
@@ -31,6 +32,8 @@ python3 src/upload -H ADDR -p PORT -s FILEPATH -n FILENAME -r protocol
 # Bajar un archivo
 python3 src/download -H ADDR -p PORT -d FILEPATH -n FILENAME -r protocol
 ```
+
+* Cada comando puede ejecutarse con el flag `-h` para tener mas informacion sobre las opciones.
 
 ### Ejemplo con la topología de pruebas
 
@@ -80,7 +83,7 @@ sudo mn --custom topologias/5_host_3_router.py --topo Topologia5Host3Switch
 
 1. Levantar la topología con Mininet.
 2. Entrar a un host: `xterm h1`.
-3. Lanzar Wireshark: `wireshark &`.
+3. Lanzar Wireshark: `wireshark &` o utilizando el plugging para traducir mas facilmente los paquetes `wireshark -X lua_script:wireshark/rdt.lua`
 4. Ejecutar el comando que quieras (cliente o servidor).
 
 ### Comparación de archivos

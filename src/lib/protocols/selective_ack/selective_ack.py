@@ -25,7 +25,7 @@ from lib.protocols.selective_ack.trace import (
 # CONSTANTS
 MAX_PAYLOAD_SIZE = 1400
 
-CWND = 4
+CWND = 8
 # in bytes
 RWIND = CWND * MAX_PAYLOAD_SIZE
 
